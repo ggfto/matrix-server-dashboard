@@ -1,0 +1,11 @@
+# local install
+.venv/
+__pycache__/
+*.pyc
+# per-server config and state
+config.json
+*.tmp
+.netmap.json
+.icloud_day.json
+# personal portrait (keep yours out of the repo)
+assets/portrait.*
