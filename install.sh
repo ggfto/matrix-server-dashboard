@@ -59,6 +59,7 @@ else
   ask TITLE "Título do painel (vazio = nome do servidor)" ""
   ask PHOTO "Caminho de uma foto para o retrato ASCII (vazio = nome do servidor em letras grandes)" ""
   IMAGE="assets/portrait.png"
+  mkdir -p assets
   if [ -n "$PHOTO" ]; then
     PHOTO="${PHOTO/#\~/$HOME}"
     if [ -f "$PHOTO" ]; then
