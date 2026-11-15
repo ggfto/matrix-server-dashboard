@@ -17,7 +17,7 @@ cai para 4 quadros, sem a chuva.
 ## 1. Baixar
 
 ```bash
-git clone https://github.com/<seu-usuario>/matrix-server-dashboard.git
+git clone https://github.com/tiagomoreiraweb/matrix-server-dashboard.git
 cd matrix-server-dashboard
 ```
 
