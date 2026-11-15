@@ -37,7 +37,7 @@ Docker e seus endpoints, rede, Tailscale e Claude Code.
 ## Instalação rápida
 
 ```bash
-git clone https://github.com/<seu-usuario>/matrix-server-dashboard.git
+git clone https://github.com/tiagomoreiraweb/matrix-server-dashboard.git
 cd matrix-server-dashboard
 ./install.sh
 ./run.sh
