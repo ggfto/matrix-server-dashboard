@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix Monitor</title>
+<link rel="stylesheet" href="/static/xterm.css">
+<style>
+  :root { --bg: #000000; --fg: #39ff6a; --dim: #00902e; --warn: #ffaf00; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  body { display: flex; flex-direction: column; font-family: "DejaVu Sans Mono", Menlo, Consolas, monospace; }
+  #bar { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 12px;
+         padding: 4px 16px; color: var(--dim); font-size: 12px; border-bottom: 1px solid #06240f; }
+  #status.on { color: var(--fg); } #status.off { color: var(--warn); }
+  #stage { flex: 1 1 auto; position: relative; overflow: hidden; }
+  #wrap { position: absolute; left: 50%; top: 0; transform-origin: top center; }
+  .xterm .xterm-viewport { overflow: hidden !important; }
+  #wrap { cursor: default; }
+  #keys { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+          padding: 6px 16px calc(6px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #06240f; }
+  #keys button { font: inherit; font-size: 13px; min-width: 34px; min-height: 30px; padding: 2px 8px;
+                 background: #000; color: var(--fg); border: 1px solid var(--dim); border-radius: 4px; cursor: pointer; }
+  #keys button:active, #keys button.hit { background: var(--dim); color: #000; }
+  #keys button.danger { color: #ff5f5f; border-color: #7a1f1f; }
+  #keys .sep { width: 10px; }
+  #keys button.term { color: #8cffff; border-color: #00e0ff; }
+  #shellbox { position: absolute; inset: 0; padding: 6px 10px; background: #000; }
+  #shellbox .xterm { height: 100%; }
+  #toast { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); color: var(--warn);
+           font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="bar"><span id="mode">__TITLE__</span><span id="status" class="off">● conectando…</span></div>
+<div id="stage"><div id="wrap"><div id="term"></div></div><div id="shellbox" hidden><div id="shell"></div></div></div>
+<div id="keys" hidden></div>
+<div id="toast"></div>
+<script src="/static/xterm.js"></script>
+<script>
+const palette = __PALETTE__;
+const hex = n => "#" + palette[n];
+const term = new Terminal({
+  cols: 180, rows: 56, fontSize: 16, lineHeight: 1.0, letterSpacing: 0,
+  fontFamily: '"DejaVu Sans Mono", Menlo, Consolas, monospace',
+  cursorBlink: false, disableStdin: true, scrollback: 0, allowProposedApi: false,
+  theme: {
+    background: "#000000", foreground: hex(7), cursor: "#000000",
+    black: hex(0), red: hex(1), green: hex(2), yellow: hex(3), blue: hex(4), magenta: hex(5), cyan: hex(6), white: hex(7),
+    brightBlack: hex(8), brightRed: hex(9), brightGreen: hex(10), brightYellow: hex(11),
+    brightBlue: hex(12), brightMagenta: hex(13), brightCyan: hex(14), brightWhite: hex(15),
+  },
+});
+const wrap = document.getElementById("wrap");
+term.open(document.getElementById("term"));
+
+// Scale the fixed-size terminal to fit the window (works on phones too).
+function fit() {
+  const stage = document.getElementById("stage");
+  const el = wrap.querySelector(".xterm-screen");
+  if (!el) return;
+  const s = Math.min(stage.clientWidth / el.offsetWidth, stage.clientHeight / el.offsetHeight);
+  wrap.style.transform = `translateX(-50%) scale(${s})`;
+}
+window.addEventListener("resize", fit);
+
+const status = document.getElementById("status");
+function connect() {
+  const es = new EventSource("/stream");
+  es.addEventListener("size", e => { const d = JSON.parse(e.data); term.resize(d.cols, d.rows); setTimeout(fit, 50); });
+  es.addEventListener("frame", e => term.write(JSON.parse(e.data)));
+  es.onopen = () => { status.textContent = "● ao vivo"; status.className = "on"; };
+  es.onerror = () => { status.textContent = "● reconectando…"; status.className = "off"; };
+}
+connect();
+// --- remote control: keyboard, clicks on the hotkey bar and on-screen buttons
+const CONTROL = __CONTROL__;
+const TERMINAL = __TERMINAL__;
+const toast = document.getElementById("toast");
+let toastTimer = 0;
+function say(text) {
+  toast.textContent = text; toast.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 2500);
+}
+async function send(key) {
+  try {
+    const r = await fetch("/key", { method: "POST", headers: { "Content-Type": "application/json", "X-Matrix-Key": "1" },
+                                    body: JSON.stringify({ key }) });
+    if (!r.ok) say("tecla recusada pelo servidor");
+  } catch (e) { say("sem conexão com o servidor"); }
+}
+if (CONTROL) {
+  document.getElementById("mode").textContent = "__TITLE__ · controle remoto · teclado e cliques ativos";
+  const NAMED = { Escape: "esc", Enter: "enter", ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left",
+                  ArrowRight: "right", Backspace: "backspace", " ": " " };
+  window.addEventListener("keydown", e => {
+    if (shell) return;  // the web terminal has the keyboard
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.key === "x" || e.key === "X") && TERMINAL) { e.preventDefault(); openShell(); return; }
+    const key = NAMED[e.key] || (e.key.length === 1 ? e.key : "");
+    if (!key) return;
+    e.preventDefault();
+    send(key);
+  });
+
+  // Clicking a keycap on the bottom row of the dashboard presses that key.
+  wrap.addEventListener("click", e => {
+    const el = wrap.querySelector(".xterm-screen");
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const col = Math.floor((e.clientX - rect.left) / rect.width * term.cols);
+    const row = Math.floor((e.clientY - rect.top) / rect.height * term.rows);
+    if (row !== term.rows - 1) return;
+    const line = term.buffer.active.getLine(row)?.translateToString(true) || "";
+    let hit = "";
+    for (const m of line.matchAll(/ ([A-Z])  (?=\S)/g)) {
+      if (m.index <= col) hit = m[1]; else break;
+    }
+    if (hit === "X") { if (TERMINAL) openShell(); else say("terminal web desativado"); }
+    else if (hit) { send(hit.toLowerCase()); say(`tecla ${hit}`); }
+  });
+
+  const keys = document.getElementById("keys");
+  const BUTTONS = [["X terminal", "x", 2], ["H", "h"], ["C", "c"], ["W mapa", "w"], ["U", "u"], ["N", "n"], ["B", "b"], ["S", "s"],
+                   ["V", "v"], ["P", "p"], ["E", "e"], ["T", "t"], ["M", "m"], ["I", "i"], [""],
+                   ["↑", "up"], ["↓", "down"], ["←", "left"], ["→", "right"], ["OK", "enter"], ["ESC", "esc"], [""],
+                   ["D", "d", 1], ["R", "r", 1]];
+  for (const [label, key, danger] of BUTTONS) {
+    if (key === "x" && !TERMINAL) continue;
+    if (!label) { const sp = document.createElement("span"); sp.className = "sep"; keys.appendChild(sp); continue; }
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (danger) b.className = danger === 2 ? "term" : "danger";
+    if (key === "x") { b.id = "termbtn"; b.addEventListener("click", () => { shell ? closeShell() : openShell(); b.blur(); }); }
+    else b.addEventListener("click", () => { if (shell) closeShell(); send(key); b.blur(); });
+    keys.appendChild(b);
+  }
+  keys.hidden = false;
+} else {
+  document.getElementById("mode").textContent = "__TITLE__ · somente visualização";
+}
+
+// --- web terminal: a login shell on the server, in its own xterm
+let shell = null;
+function post(path, body) {
+  return fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Matrix-Key": "1" },
+                       body: JSON.stringify(body) }).catch(() => {});
+}
+function decode(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function shellSize(t) {
+  const box = document.getElementById("shellbox");
+  const scr = box.querySelector(".xterm-screen");
+  const cw = scr.offsetWidth / t.cols, ch = scr.offsetHeight / t.rows;
+  return { cols: Math.max(20, Math.floor((box.clientWidth - 20) / cw)),
+           rows: Math.max(5, Math.floor((box.clientHeight - 12) / ch)) };
+}
+function openShell() {
+  if (!TERMINAL || shell) return;
+  const box = document.getElementById("shellbox");
+  box.hidden = false; wrap.hidden = true;
+  const btn = document.getElementById("termbtn");
+  if (btn) btn.textContent = "voltar ao painel";
+  const t = new Terminal({
+    cols: 80, rows: 24, fontSize: 15, lineHeight: 1.0, cursorBlink: true, scrollback: 5000,
+    fontFamily: '"DejaVu Sans Mono", Menlo, Consolas, monospace',
+    theme: { background: "#000000", foreground: "#c6ffd2", cursor: "#39ff6a" },
+  });
+  t.open(document.getElementById("shell"));
+  const size = shellSize(t);
+  t.resize(size.cols, size.rows);
+  const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const es = new EventSource(`/term/stream?id=${id}&cols=${size.cols}&rows=${size.rows}`);
+  shell = { t, es, id, onresize: null };
+  const dec = new TextDecoder();
+  es.addEventListener("o", e => t.write(dec.decode(decode(JSON.parse(e.data)), { stream: true })));
+  es.addEventListener("exit", () => { say("terminal encerrado"); closeShell(); });
+  es.onerror = () => { if (shell && shell.es === es) { say("terminal desconectado"); closeShell(); } };
+  let pending = "", timer = 0;
+  t.onData(d => {
+    pending += d;
+    if (!timer) timer = setTimeout(() => { post("/term/input", { id, data: pending }); pending = ""; timer = 0; }, 8);
+  });
+  shell.onresize = () => {
+    const s = shellSize(t);
+    if (s.cols !== t.cols || s.rows !== t.rows) { t.resize(s.cols, s.rows); post("/term/resize", { id, ...s }); }
+  };
+  window.addEventListener("resize", shell.onresize);
+  document.getElementById("mode").textContent = "__TITLE__ · terminal · exit ou o botão volta ao painel";
+  t.focus();
+}
+function closeShell() {
+  if (!shell) return;
+  const s = shell; shell = null;
+  s.es.close();
+  window.removeEventListener("resize", s.onresize);
+  s.t.dispose();
+  document.getElementById("shellbox").hidden = true; wrap.hidden = false;
+  const btn = document.getElementById("termbtn");
+  if (btn) btn.textContent = "X terminal";
+  document.getElementById("mode").textContent = "__TITLE__ · controle remoto · teclado e cliques ativos";
+  setTimeout(fit, 50);
+}
+
+// Fonts and the first frame change the terminal size; keep the scale in sync.
+setInterval(fit, 1000);
+setTimeout(fit, 200);
+</script>
+</body>
+</html>

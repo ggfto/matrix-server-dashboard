@@ -1,0 +1,39 @@
+{
+  "_help": "Copie para config.json (o install.sh faz isso). Listas com \"auto\" são preenchidas sozinhas a cada início; itens ao lado de \"auto\" são mantidos. Detalhes no README.",
+  "title": "",
+  "operator": "",
+  "image": "assets/portrait.png",
+  "fps": 10,
+  "matrix_density": 0.45,
+  "boot_animation": true,
+  "console_palette": true,
+  "ping_host": "1.1.1.1",
+  "mounts": ["auto"],
+  "network_interface": "auto",
+  "systemd_units": ["auto"],
+  "checks": ["auto"],
+  "hide_containers": [],
+  "thresholds": {
+    "cpu": 85,
+    "ram": 85,
+    "disk": 90,
+    "temperature": 80
+  },
+  "claude": "auto",
+  "screen_off": {
+    "enabled": false,
+    "from": "00:00",
+    "to": "07:00"
+  },
+  "web": {
+    "enabled": false,
+    "port": 8095,
+    "fps": 5,
+    "control": false,
+    "terminal": false,
+    "allow": ["auto"]
+  },
+  "devices": {},
+  "backup_state": "",
+  "icloud": {}
+}
