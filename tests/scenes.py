@@ -240,11 +240,21 @@ def _argocd_view(d):
     d.toggle_view("argocd")
 
 
+def _menu_typing_secret(d):
+    d.config["alerts"] = {"delay": 2, "repeat": 60, "discord": {"webhook": "https://discord.com/api/webhooks/1/abcd"}}
+    d.menu.open()
+    d.menu.cursor = next(i for i, it in enumerate(d.menu.items) if it.get("key") == "tg_token")
+    d.menu.handle("enter")
+    for ch in "123456:SECRET":
+        d.menu.handle(ch)
+
+
 SCENES = {
     "dashboard": lambda: _render(190, 52),
     "boot": lambda: _render(120, 34, at=-0.4),
     "help": lambda: _render(160, 46, lambda d: setattr(d, "help_open", True)),
     "settings": lambda: _render(160, 46, lambda d: d.menu.open()),
+    "settings_alerts": lambda: _render(160, 46, _menu_typing_secret),
     "settings_containers": lambda: _render(160, 46, _menu_on_containers),
     "medium": lambda: _render(130, 40),
     "compact": lambda: _render(92, 26),

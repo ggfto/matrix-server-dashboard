@@ -16,8 +16,14 @@ Argo CD Degraded ou com sync que falhou, túnel WireGuard/Tailscale caído e lim
 - **Horário de silêncio** e **silenciar por 1 hora** seguram os avisos; o que ainda estiver
   ativo é enviado quando o silêncio acaba.
 
-Configure um ou mais canais na chave `alerts` do `config.json` (o resto fica no menu `C` →
-ALERTAS, que também tem **Enviar mensagem de teste**):
+Configure pelo próprio painel: **`C` → ALERTAS**, uma seção por canal. Pelo SSH dá para colar
+o token ou a URL (colar no terminal é o mesmo que digitar). Segredos aparecem como `******abcd`,
+também enquanto você digita, porque a tela vai para a página web; Enter vazio mantém o valor e
+`-` apaga. No Telegram, mande um oi para o bot e use **Descobrir chat ID**; no ntfy, **Gerar
+tópico aleatório** cria um nome difícil de adivinhar. **Enviar mensagem de teste** mostra no
+menu o que chegou e o que falhou.
+
+O mesmo fica na chave `alerts` do `config.json`, se preferir editar o arquivo:
 
 ```json
 "alerts": {

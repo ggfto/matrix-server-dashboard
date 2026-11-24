@@ -35,9 +35,11 @@ class MenuBuilder:
         self.items.append({"kind": "header", "label": label, "info": info})
 
     def field(self, key: str, label: str, hint: str, validate: validators.Validator | None,
-              save: Callable[[], None] | None = None, kind: str = "text", options: list[str] | None = None):
-        self.items.append({"kind": kind, "key": key, "label": label, "hint": hint,
-                           "validate": validate, "save": save, "options": options})
+              save: Callable[[], None] | None = None, kind: str = "text", options: list[str] | None = None,
+              secret: bool = False, max_len: int = 40):
+        """secret: shown as ******abcd, typed blind; Enter on an empty edit keeps it, "-" clears it."""
+        self.items.append({"kind": kind, "key": key, "label": label, "hint": hint, "validate": validate,
+                           "save": save, "options": options, "secret": secret, "max_len": max_len})
 
     def action(self, label: str, hint: str, fn: Callable[[], None], style: int = G5):
         self.items.append({"kind": "action", "label": label, "hint": hint, "action": fn, "style": style})
@@ -353,7 +355,13 @@ class SettingsMenu:
                 self.message = ("edição cancelada", G4)
             elif key == "enter":
                 value = self.edit_buffer.strip()
-                err = item["validate"](value) if item.get("validate") else None
+                if item.get("secret") and not value:
+                    self.edit_buffer = None
+                    self.message = ("mantido o valor anterior", G4)
+                    return
+                if value == "-":
+                    value = ""  # clears the field (channel off)
+                err = item["validate"](value) if item.get("validate") and value else None
                 if err:
                     self.message = (err, RED)
                     return
@@ -363,7 +371,7 @@ class SettingsMenu:
                     item["save"]()
             elif key == "backspace":
                 self.edit_buffer = self.edit_buffer[:-1]
-            elif len(key) == 1 and key.isprintable() and len(self.edit_buffer) < 40:
+            elif len(key) == 1 and key.isprintable() and len(self.edit_buffer) < item.get("max_len", 40):
                 self.edit_buffer += key
             return
 
@@ -393,7 +401,8 @@ class SettingsMenu:
                     self.build()
                     self.cursor = next((i for i, it in enumerate(self.items) if it.get("label") == current), self.cursor)
             elif key == "enter" and kind == "text":
-                self.edit_buffer = self.values.get(item["key"], "")
+                # Secrets start empty: the old value never shows up (the screen also goes to the web page).
+                self.edit_buffer = "" if item.get("secret") else self.values.get(item["key"], "")
                 self.message = ("digite e confirme com OK · ESC cancela", CYAN)
             elif key == "enter" and kind == "action":
                 item["action"]()
@@ -454,11 +463,15 @@ class SettingsMenu:
             else:
                 c.put(ix + 2, yy, it["label"], label_style)
                 if sel and self.edit_buffer is not None:
-                    c.put(value_x, yy, self.edit_buffer, CYAN)
+                    shown = "*" * len(self.edit_buffer) if it.get("secret") else self.edit_buffer
+                    shown = shown[-max(1, iw - 34):]  # long URLs: keep the end, where the typing is
+                    c.put(value_x, yy, shown, CYAN)
                     if blink:
-                        c.put(value_x + len(self.edit_buffer), yy, "█", CYAN)
+                        c.put(value_x + len(shown), yy, "█", CYAN)
                 else:
                     value = self.values.get(it["key"], "")
+                    if it.get("secret") and value:
+                        value = "******" + value[-4:]
                     if kind == "choice":
                         value = f"◂ {value} ▸" if sel else value
                     pending = it["key"].startswith("net_") and self.net_dirty

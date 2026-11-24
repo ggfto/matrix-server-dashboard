@@ -11,7 +11,8 @@
   (`system/k8s/make-kubeconfig.sh`).
 - Alertas por Telegram, Discord, ntfy e webhook: os alertas do cabeçalho viram mensagens,
   com espera antes de avisar, lembrete, "resolvido", horário de silêncio, silenciar por 1 hora e
-  mensagem de teste pelo menu `C`.
+  mensagem de teste pelo menu `C`, onde também se configura cada canal (segredos mascarados,
+  descoberta do chat do Telegram, tópico aleatório do ntfy).
 - Temas de cores prontos (matrix, âmbar, gelo, synthwave, mono) no menu `C`, trocando na hora
   no terminal, no tty1 e na página web; chaves `theme` e `theme_colors`.
 - WireGuard: estado da interface e dos peers (handshake, endpoint, tráfego) na linha de

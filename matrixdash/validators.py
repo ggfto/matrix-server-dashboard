@@ -59,3 +59,24 @@ def float_range(lo: float, hi: float) -> Validator:
         except ValueError:
             return f"número de {lo} a {hi}"
     return check
+
+
+def telegram_token(value: str) -> str | None:
+    return None if re.fullmatch(r"\d{5,}:[A-Za-z0-9_-]{30,}", value.strip()) else "token do BotFather: 123456:ABC..."
+
+
+def chat_id(value: str) -> str | None:
+    return None if re.fullmatch(r"-?\d+|@\w{4,}", value.strip()) else "número (ex.: 123456789) ou @canal"
+
+
+def http_url(value: str) -> str | None:
+    return None if re.fullmatch(r"https?://\S+", value.strip()) else "URL começando com http:// ou https://"
+
+
+def discord_webhook(value: str) -> str | None:
+    ok = re.fullmatch(r"https://(\w+\.)?discord(app)?\.com/api/webhooks/\d+/\S+", value.strip())
+    return None if ok else "URL do webhook: https://discord.com/api/webhooks/..."
+
+
+def ntfy_topic(value: str) -> str | None:
+    return None if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value.strip()) else "letras, números, - e _ (até 64)"

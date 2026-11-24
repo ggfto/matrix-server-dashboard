@@ -157,6 +157,96 @@ class Menu(unittest.TestCase):
             self.assertEqual(rec.sent[-1].kind, "test")
 
 
+class ChannelSetup(unittest.TestCase):
+    """Configuring the channels from the settings menu, as typed (or pasted over SSH)."""
+
+    TOKEN = "123456789:AAH" + "x" * 32 + "wxyz"
+
+    def setUp(self):
+        random.seed(1)
+        self.d = scenes.demo.make_dashboard(160, 46)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d.config_path = Path(self.tmp.name) / "config.json"
+        self.d.config_path.write_text("{}")
+        self.d.config["alerts"] = {"delay": 2, "repeat": 60}
+        self.menu = self.d.menu
+        self.menu.open()
+        self.menu.run_bg = lambda label, fn: fn()  # synchronous
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def goto(self, key):
+        self.menu.cursor = next(i for i, it in enumerate(self.menu.items) if it.get("key") == key)
+
+    def type(self, text):
+        self.menu.handle("enter")
+        for ch in text:
+            self.menu.handle(ch)
+        self.menu.handle("enter")
+
+    def saved(self):
+        return json.loads(self.d.config_path.read_text()).get("alerts", {})
+
+    def test_secret_is_saved_masked_kept_and_cleared(self):
+        self.goto("tg_token")
+        self.menu.handle("enter")
+        self.assertEqual(self.menu.edit_buffer, "")  # never starts with the old secret
+        for ch in self.TOKEN:
+            self.menu.handle(ch)
+        self.menu.handle("enter")
+        self.assertEqual(self.saved()["telegram"]["token"], self.TOKEN)
+        self.goto("tg_token")
+        self.type("")  # Enter on an empty edit keeps it
+        self.assertEqual(self.saved()["telegram"]["token"], self.TOKEN)
+        self.type("-")
+        self.assertNotIn("token", self.saved()["telegram"])
+
+    def test_invalid_value_is_refused(self):
+        self.goto("dc_webhook")
+        self.type("https://example.com/not-discord")
+        self.assertEqual(self.menu.message[1], scenes.demo.theme.RED)
+        self.assertNotIn("discord", self.saved())
+
+    def test_channel_turns_on_when_complete(self):
+        mgr = self.d.collector.notifier
+        self.goto("tg_token")
+        self.type(self.TOKEN)
+        self.assertEqual(mgr.channels(), [])
+        self.goto("tg_chat")
+        self.type("-100123")
+        self.assertEqual([c.name for c in mgr.channels()], ["telegram"])
+        self.assertIn("Enviar mensagem de teste", [it.get("label") for it in self.menu.items])
+
+    def test_discover_chat_id(self):
+        self.goto("tg_token")
+        self.type(self.TOKEN)
+        reply = {"ok": True, "result": [{"message": {"chat": {"id": 42, "first_name": "Ana"}}}]}
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps(reply).encode()
+        seen = []
+        from matrixdash.notify import manager
+        with mock.patch.object(manager.urllib.request, "urlopen", lambda req, timeout=10: seen.append(req.full_url) or Resp()):
+            next(it for it in self.menu.items if it.get("label") == "  Descobrir chat ID")["action"]()
+        self.assertTrue(seen[0].endswith("/getUpdates"))
+        self.assertEqual(self.saved()["telegram"]["chat_id"], "42")
+        self.assertEqual(self.menu.message[0], "chat encontrado: Ana (42)")
+
+    def test_random_topic(self):
+        next(it for it in self.menu.items if it.get("label") == "  Gerar tópico aleatório")["action"]()
+        topic = self.saved()["ntfy"]["topic"]
+        self.assertRegex(topic, r"^matrix-[a-z0-9-]+-[0-9a-f]{12}$")
+        self.assertEqual(self.menu.values["nf_topic"], topic)
+
+
 class Storage(unittest.TestCase):
     def test_saving_keeps_private_permissions(self):
         import os

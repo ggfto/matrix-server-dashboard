@@ -10,10 +10,13 @@ Sending runs in its own thread, so a slow channel never delays data collection.
 
 from __future__ import annotations
 
+import json
 import queue
+import secrets
 import socket
 import threading
 import time
+import urllib.request
 from typing import TYPE_CHECKING, Any
 
 from .. import alerts, validators
@@ -154,16 +157,29 @@ class AlertManager:
                            (f" · falhou: {', '.join(f.split(':')[0] for f in failed)}" if failed else "")
         return failed
 
-    def send_test(self):
+    def send_test(self, wait: bool = False) -> list[str]:
+        """Test message to every channel; with wait=True, sends now and returns the failures."""
         active = alerts.active(self.collector.snap, self.collector.thresholds, self.collector.integrations)
         lines = [f"Canais: {', '.join(ch.name for ch in self.channels())}",
                  f"Alertas ativos agora: {len(active)}"] + [f"• {a.text}" for a in active[:10]]
-        self.enqueue(Message(self.host, TEST, f"🔔 {self.host}: teste do Matrix Dashboard", lines))
+        msg = Message(self.host, TEST, f"🔔 {self.host}: teste do Matrix Dashboard", lines)
+        if wait:
+            return self.deliver(msg)
+        self.enqueue(msg)
+        return []
 
     def mute(self, seconds: float):
         self.mute_until = time.time() + seconds if seconds else 0.0
 
     # --- settings menu
+
+    # (config channel, config field) behind each menu field
+    CHANNEL_FIELDS = {
+        "tg_token": ("telegram", "token"), "tg_chat": ("telegram", "chat_id"),
+        "dc_webhook": ("discord", "webhook"),
+        "nf_topic": ("ntfy", "topic"), "nf_server": ("ntfy", "server"), "nf_token": ("ntfy", "token"),
+        "wh_url": ("webhook", "url"),
+    }
 
     def menu_load(self, values: dict[str, str]):
         quiet = self.cfg.get("quiet") or {}
@@ -172,30 +188,95 @@ class AlertManager:
         values["al_quiet"] = "LIGADO" if quiet.get("enabled") else "DESLIGADO"
         values["al_quiet_from"] = str(quiet.get("from", "23:00"))
         values["al_quiet_to"] = str(quiet.get("to", "07:00"))
+        for key, (channel, fld) in self.CHANNEL_FIELDS.items():
+            values[key] = str((self.cfg.get(channel) or {}).get(fld) or "")
+        values["nf_server"] = values["nf_server"] or "https://ntfy.sh"
+
+    def save(self, menu, update: dict[str, Any], message: str = "alertas salvos"):
+        """Merge `update` into config["alerts"] (in memory and in config.json)."""
+        def merge(target: dict[str, Any]):
+            for key, value in update.items():
+                if isinstance(value, dict):
+                    section = target.setdefault(key, {})
+                    for k, v in value.items():
+                        if v in ("", None):
+                            section.pop(k, None)
+                        else:
+                            section[k] = v
+                else:
+                    target[key] = value
+        merge(self.cfg)
+        try:
+            save_user_config(menu.d.config_path, lambda raw: merge(raw.setdefault("alerts", {})))
+            menu.message = (message, G5)
+        except (OSError, ValueError) as exc:
+            menu.message = (f"erro ao salvar: {exc}"[:70], RED)
+
+    def save_channel_field(self, menu, key: str):
+        channel, fld = self.CHANNEL_FIELDS[key]
+        value = menu.values[key].strip()
+        self.save(menu, {channel: {fld: value}},
+                  f"{channel}: {'apagado' if not value else 'salvo'}" + (" · pronto para enviar" if any(
+                      c.name == channel for c in self.channels()) else ""))
+        menu.build()
+
+    def discover_chat(self, menu):
+        """Latest chat that wrote to the bot (getUpdates), saved as chat_id."""
+        token = str((self.cfg.get("telegram") or {}).get("token") or "")
+        if not token:
+            menu.message = ("informe o token do bot primeiro", AMBER)
+            return
+
+        def run():
+            try:
+                req = urllib.request.Request(f"https://api.telegram.org/bot{token}/getUpdates",
+                                             headers={"User-Agent": "matrix-dashboard"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    updates = json.loads(resp.read()).get("result") or []
+            except Exception as exc:
+                menu.message = (f"telegram: {exc}"[:70], RED)
+                return
+            chat = None
+            for upd in reversed(updates):
+                for kind in ("message", "channel_post", "my_chat_member", "edited_message"):
+                    chat = (upd.get(kind) or {}).get("chat")
+                    if chat:
+                        break
+                if chat:
+                    break
+            if not chat:
+                menu.message = ("nenhuma mensagem: mande um oi para o bot e tente de novo", AMBER)
+                return
+            menu.values["tg_chat"] = str(chat["id"])
+            who = chat.get("title") or chat.get("username") or chat.get("first_name") or ""
+            self.save(menu, {"telegram": {"chat_id": str(chat["id"])}}, f"chat encontrado: {who} ({chat['id']})")
+            menu.build()
+        menu.run_bg("consultando o telegram", run)
+
+    def random_topic(self, menu):
+        topic = f"matrix-{self.host.lower()}-{secrets.token_hex(6)}"
+        menu.values["nf_topic"] = topic
+        self.save(menu, {"ntfy": {"topic": topic}}, f"tópico: {topic} · assine no app ntfy")
+        menu.build()
 
     def menu(self, m):
         menu = m.menu
         names = [ch.name for ch in self.channels()]
         status = "silenciado até " + time.strftime("%H:%M", time.localtime(self.mute_until)) \
             if time.time() < self.mute_until else self.last_result or (" · ".join(names) if names else "")
-        m.header("ALERTAS", status or "nenhum canal: config.json → alerts (docs/INTEGRACOES.md)")
-        if not names:
-            return
+        m.header("ALERTAS", status or "nenhum canal ainda: configure um abaixo")
 
         def save():
             v = menu.values
             quiet = {"enabled": v["al_quiet"] == "LIGADO", "from": v["al_quiet_from"], "to": v["al_quiet_to"]}
-            update = {"delay": int(v["al_delay"]), "repeat": int(v["al_repeat"]), "quiet": quiet}
-            self.cfg.update(update)
-            try:
-                save_user_config(menu.d.config_path, lambda raw: raw.setdefault("alerts", {}).update(update))
-                menu.message = ("alertas salvos", G5)
-            except (OSError, ValueError) as exc:
-                menu.message = (f"erro ao salvar: {exc}"[:70], RED)
+            self.save(menu, {"delay": int(v["al_delay"]), "repeat": int(v["al_repeat"]), "quiet": quiet})
 
         def test():
-            self.send_test()
-            menu.message = (f"teste enviado para {', '.join(names)}", CYAN)
+            def run():
+                failed = self.send_test(wait=True)
+                menu.message = (("falhou: " + "; ".join(failed))[:90], RED) if failed else \
+                    (f"teste entregue: {', '.join(names)}", G5)
+            menu.run_bg("enviando teste", run)
 
         def toggle_mute():
             muted = time.time() < self.mute_until
@@ -210,7 +291,35 @@ class AlertManager:
                 None, save, "choice", ["DESLIGADO", "LIGADO"])
         m.field("al_quiet_from", "  silêncio das", "HH:MM", validators.clock, save)
         m.field("al_quiet_to", "  até as", "HH:MM", validators.clock, save)
-        m.action("Enviar mensagem de teste", f"manda um teste para {', '.join(names)}", test, CYAN)
-        muted = time.time() < self.mute_until
-        m.action("Reativar alertas" if muted else "Silenciar por 1 hora", "vale até reiniciar o painel", toggle_mute,
-                 G5 if muted else AMBER)
+        if names:
+            m.action("Enviar mensagem de teste", f"manda um teste para {', '.join(names)} e mostra o resultado",
+                     test, CYAN)
+            muted = time.time() < self.mute_until
+            m.action("Reativar alertas" if muted else "Silenciar por 1 hora", "vale até reiniciar o painel",
+                     toggle_mute, G5 if muted else AMBER)
+
+        def field(key, label, hint, check, secret=False, max_len=40):
+            m.field(key, label, hint + " · Enter vazio mantém · - apaga" if secret else hint + " · - apaga",
+                    check, lambda: self.save_channel_field(menu, key), secret=secret, max_len=max_len)
+
+        def state(name: str) -> str:
+            return "ligado" if name in names else "desligado"
+
+        m.header("  TELEGRAM", state("telegram"))
+        field("tg_token", "  Token do bot", "do @BotFather (/newbot) · pode colar pelo SSH", validators.telegram_token,
+              secret=True, max_len=80)
+        field("tg_chat", "  Chat ID", "ou use 'Descobrir' abaixo", validators.chat_id)
+        m.action("  Descobrir chat ID", "mande um oi para o bot no Telegram e aperte OK",
+                 lambda: self.discover_chat(menu), CYAN)
+        m.header("  DISCORD", state("discord"))
+        field("dc_webhook", "  URL do webhook", "canal → Editar → Integrações → Webhooks → Copiar URL",
+              validators.discord_webhook, secret=True, max_len=200)
+        m.header("  NTFY", state("ntfy"))
+        field("nf_topic", "  Tópico", "assine o mesmo tópico no app ntfy", validators.ntfy_topic, max_len=64)
+        m.action("  Gerar tópico aleatório", "nome difícil de adivinhar (no ntfy.sh público quem sabe o nome lê)",
+                 lambda: self.random_topic(menu), CYAN)
+        field("nf_server", "  Servidor", "https://ntfy.sh ou o seu", validators.http_url, max_len=120)
+        field("nf_token", "  Token (opcional)", "só em servidor com login", None, secret=True, max_len=120)
+        m.header("  WEBHOOK", state("webhook"))
+        field("wh_url", "  URL", "recebe POST com JSON (n8n, Home Assistant...)", validators.http_url,
+              secret=True, max_len=200)
