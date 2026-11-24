@@ -15,7 +15,6 @@ from . import autodetect
 from .config import DEFAULT_CONFIG
 from .render.canvas import Canvas
 from .render.rain import MatrixRain
-from .shell import run_cmd
 from .sysinfo import get_local_ip, iface_for_ip, read_ipv4
 from .theme import AMBER, CYAN, G1, G2, G3, G4, G5, G6, RED, SPINNER, TEXT, WHITE
 
@@ -356,18 +355,10 @@ class SettingsMenu:
         self.load()
         self.build()
 
-    @staticmethod
-    def restart_policies() -> dict[str, str]:
-        code, ids = run_cmd(["docker", "ps", "-aq"], timeout=4.0)
-        if code != 0 or not ids:
-            return {}
-        _, out = run_cmd(["docker", "inspect", "-f", "{{.Name}} {{.HostConfig.RestartPolicy.Name}}", *ids.split()],
-                         timeout=6.0)
-        result = {}
-        for line in out.splitlines():
-            parts = line.strip().lstrip("/").split()
-            if len(parts) == 2:
-                result[parts[0]] = parts[1]
+    def restart_policies(self) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for rt in self.d.collector.runtimes:
+            result.update(rt.restart_policies())
         return result
 
     CONTAINER_VERBS = {
@@ -380,13 +371,13 @@ class SettingsMenu:
         cmd, done = self.CONTAINER_VERBS[verb]
 
         def run():
-            code, _ = run_cmd(["docker", cmd, name], timeout=90)
-            ok = code == 0
+            rt = self.d.collector.runtime_for(name)
+            ok = bool(rt and rt.action(name, cmd, timeout=90))
             self.message = (f"{name} {done}" if ok else f"falha ao {verb} {name}", G5 if ok else RED)
-            self.d.collector.emit("DOCKER", f"{name} {done} pelo menu" if ok else f"falha ao {verb} {name}",
-                                  G5 if ok else RED)
+            self.d.collector.emit(rt.label if rt else "DOCKER",
+                                  f"{name} {done} pelo menu" if ok else f"falha ao {verb} {name}", G5 if ok else RED)
             # Refresh the list right away so the row shows the new state and actions.
-            self.d.collector._docker_ps()
+            self.d.collector.refresh_containers()
             self.d.collector.snap.containers = self.d.collector.containers
             current = name
             self.build()

@@ -33,7 +33,6 @@ from .render.portrait import Portrait
 from .render.rain import MatrixRain
 from .render.screen import Screen
 from .settings_menu import SettingsMenu
-from .shell import run_cmd
 from .theme import (
     ALT_SCREEN,
     AMBER,
@@ -373,8 +372,8 @@ class Dashboard:
         verb, cmd = ("pausado", "stop") if running else ("retomado", "start")
 
         def run():
-            code, _ = run_cmd(["docker", cmd, name], timeout=60)
-            if code == 0:
+            rt = self.collector.runtime_for(name)
+            if rt and rt.action(name, cmd, timeout=60):
                 self.notify(f"download do iCloud {verb}", AMBER if cmd == "stop" else G5)
                 self.collector.emit("ICLOUD", f"download {verb} pelo teclado", AMBER if cmd == "stop" else G5)
                 self.collector._icloud()

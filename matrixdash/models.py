@@ -17,6 +17,8 @@ class Container:
     ports: str
     cpu: float | None = None
     mem: str = ""
+    # runtime that owns it ("docker", ...)
+    runtime: str = ""
 
 
 @dataclass

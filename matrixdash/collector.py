@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import socket
-import subprocess
 import threading
 import time
 from collections import deque
@@ -19,10 +18,10 @@ import psutil
 
 from . import ROOT, autodetect
 from .claude_usage import UsageTracker
-from .fmt import fmt_rate, fmt_size, parse_size
+from .fmt import fmt_rate, fmt_size
 from .models import ClaudeInfo, Container, Event, Snapshot
 from .netmap import NetMapper
-from .runtime.docker_fmt import short_age, short_ports
+from .runtime import ContainerRuntime, from_config
 from .shell import run_cmd
 from .sysinfo import (
     get_local_ip,
@@ -49,8 +48,8 @@ def claude_version_fallback() -> str:
 class Collector:
     """Gathers server data in two background threads.
 
-    The fast loop (cpu, memory, network, docker ps, claude) builds a new
-    Snapshot every second; the slow loop (docker stats, HTTP probes,
+    The fast loop (cpu, memory, network, containers, claude) builds a new
+    Snapshot every second; the slow loop (container stats, HTTP probes,
     systemctl) feeds results that the fast loop merges in. The renderer only
     reads `self.snap`, which is replaced atomically.
     """
@@ -94,7 +93,9 @@ class Collector:
         self.claude_procs: dict[int, psutil.Process] = {}
         self.claude_idle_since = time.monotonic()
         self.latency: float | None = None
-        self.docker_stats: dict[str, tuple[float, str]] = {}
+        self.runtimes: list[ContainerRuntime] = from_config(config)
+        self.owner: dict[str, ContainerRuntime] = {}
+        self.container_stats: dict[str, tuple[float | None, str]] = {}
         self.units: list[tuple[str, str, str]] = []
         self.probes: dict[str, tuple[bool, int, float | None, str]] = {}
 
@@ -122,7 +123,7 @@ class Collector:
         self.probe_cycle = 0
         self.last_probe_event = time.monotonic()
         self.netmap_styles = {"new": AMBER, "gone": G3}
-        self.netmapper = NetMapper(config, self.iface,
+        self.netmapper = NetMapper(config, self.iface, self.runtimes,
                                    lambda tag, text, kind: self.emit(tag, text, self.netmap_styles.get(kind, G4)))
 
     # --- events
@@ -143,43 +144,32 @@ class Collector:
         except Exception:
             return 0, 0
 
-    def _docker_ps(self):
-        code, out = run_cmd(
-            ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"],
-            timeout=4.0,
-        )
-        if code != 0:
-            self.docker_ok = False
-            self.containers = []
-            return
-        self.docker_ok = True
-        result = []
-        for line in out.splitlines():
-            parts = line.split("\t")
-            if len(parts) < 4:
+    def runtime_for(self, name: str) -> ContainerRuntime | None:
+        """Runtime that owns a container (the first one when the container is unknown)."""
+        return self.owner.get(name) or (self.runtimes[0] if self.runtimes else None)
+
+    def refresh_containers(self):
+        """Containers of every runtime, with the stats of the last slow cycle merged in."""
+        result: list[Container] = []
+        owner: dict[str, ContainerRuntime] = {}
+        reachable = False
+        for rt in self.runtimes:
+            found = rt.containers()
+            if found is None:
                 continue
-            name, state, status, image = parts[:4]
-            if name.lower() in self.hidden:
-                continue
-            ports = parts[4] if len(parts) > 4 else ""
-            health = ""
-            hm = re.search(r"\((healthy|unhealthy|health: starting)\)", status)
-            if hm:
-                health = "starting" if "starting" in hm.group(1) else hm.group(1)
-            em = re.search(r"Exited \((\d+)\)", status)
-            cpu, mem = self.docker_stats.get(name, (None, ""))
-            result.append(Container(
-                name=name,
-                state=state.lower(),
-                health=health,
-                age=short_age(status),
-                exit_code=em.group(1) if em else "",
-                image=image,
-                ports=short_ports(ports),
-                cpu=cpu if state.lower() == "running" else None,
-                mem=mem if state.lower() == "running" else "",
-            ))
+            reachable = True
+            for ct in found:
+                if ct.name.lower() in self.hidden:
+                    continue
+                running = ct.state == "running"
+                cpu, mem = self.container_stats.get(ct.name, (None, ""))
+                ct.cpu = cpu if running else None
+                ct.mem = mem if running else ""
+                owner[ct.name] = rt
+                result.append(ct)
+        self.docker_ok = reachable
         self.containers = result
+        self.owner = owner
 
     def _claude(self):
         if not self.config.get("claude"):
@@ -283,9 +273,8 @@ class Collector:
                        f"police rate {int(mbytes * 8)}mbit burst 1m drop flowid :1")
         else:
             script += "true"
-        code, _ = run_cmd(["docker", "run", "--rm", "--network", f"container:{name}", "--cap-add", "NET_ADMIN",
-                           "matrix-tc", "sh", "-c", script], timeout=30.0)
-        return code == 0
+        rt = self.runtime_for(name)
+        return bool(rt and rt.run_sidecar(name, "matrix-tc", script, timeout=30.0))
 
     def _icloud(self):
         cfg = self.config.get("icloud") or {}
@@ -325,8 +314,8 @@ class Collector:
                 except OSError:
                     pass
 
-        code, out = run_cmd(["docker", "inspect", "-f", "{{.State.Status}} {{.State.StartedAt}}", name], timeout=4.0)
-        state, started = (out.split() + ["", ""])[:2] if code == 0 else ("missing", "")
+        rt = self.runtime_for(name)
+        state, started = rt.state(name) if rt else ("missing", "")
         prev = self.icloud or {}
         info: dict[str, Any] = {
             "container": name, "state": state, "items": items, "bytes": total_bytes,
@@ -336,12 +325,7 @@ class Collector:
             "next_check": None,
         }
         if state == "running":
-            try:
-                proc = subprocess.run(["docker", "logs", "--since", "3h", "--tail", "4000", name],
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=8)
-                lines = proc.stdout.splitlines()
-            except Exception:
-                lines = []
+            lines = rt.logs(name, since="3h", tail=4000, timeout=8) if rt else []
             status, last_ts, auth_error = "starting", "", False
             for line in lines:
                 if "DEBUG" in line[:30]:
@@ -376,14 +360,10 @@ class Collector:
                     pass
             if not info["total"]:
                 # The "Downloading N" line may be older than the window above.
-                try:
-                    full = subprocess.run(["docker", "logs", name], stdout=subprocess.PIPE,
-                                          stderr=subprocess.STDOUT, text=True, timeout=30).stdout
-                    found = re.findall(r"Downloading (\d+) original", full)
-                    if found:
-                        info["total"] = int(found[-1])
-                except Exception:
-                    pass
+                full = "\n".join(rt.logs(name, timeout=30)) if rt else ""
+                found = re.findall(r"Downloading (\d+) original", full)
+                if found:
+                    info["total"] = int(found[-1])
             info["status"] = "login" if auth_error and status != "downloading" else status
             desired = info["limit"]
             if self.icloud_applied != (started, desired):
@@ -428,22 +408,15 @@ class Collector:
         self.plan = {"windows": windows, "updated": mtime, "plan": str(self.config.get("claude_plan") or "")}
 
     def _slow_once(self):
-        code, out = run_cmd(
-            ["docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"],
-            timeout=15.0,
-        )
-        if code == 0:
-            stats = {}
-            for line in out.splitlines():
-                parts = line.split("\t")
-                if len(parts) < 3:
-                    continue
-                try:
-                    cpu = float(parts[1].strip().rstrip("%"))
-                except ValueError:
-                    cpu = None
-                stats[parts[0]] = (cpu, fmt_size(parse_size(parts[2].split("/")[0])))
-            self.docker_stats = stats
+        stats: dict[str, tuple[float | None, str]] = {}
+        reachable = False
+        for rt in self.runtimes:
+            found = rt.stats()
+            if found is not None:
+                reachable = True
+                stats.update(found)
+        if reachable:  # keep the last numbers while the runtime does not answer
+            self.container_stats = stats
 
         units_cfg = self.config.get("systemd_units", [])
         if units_cfg:
@@ -462,7 +435,7 @@ class Collector:
             self._usage()
 
         probes = {}
-        for check in autodetect.live_checks(self.config.get("checks")):
+        for check in autodetect.live_checks(self.config.get("checks"), self.runtimes):
             name = str(check.get("name", "CHECK"))
             key = str(check.get("container") or name)
             if check.get("url"):
@@ -523,7 +496,7 @@ class Collector:
             self.lat_hist.append(s.latency)
 
         if tick % 4 == 0:
-            self._docker_ps()
+            self.refresh_containers()
         if tick % 2 == 0:
             self._claude()
             self._backup()
@@ -730,7 +703,7 @@ class Collector:
             self.stop.wait(12.0)
 
     def prime(self):
-        self._docker_ps()
+        self.refresh_containers()
         self._claude()
         self._net_probe()
         units_cfg = self.config.get("systemd_units", [])
