@@ -438,7 +438,9 @@ class SettingsMenu:
             elif kind == "container":
                 running = it["state"] == "running"
                 c.put(ix + 2, yy, "●", G5 if running else AMBER)
-                c.put(ix + 4, yy, it["label"], label_style)
+                # k3s names ("namespace/workload") can be long: keep the state column clear
+                label = it["label"] if len(it["label"]) <= 27 else it["label"][:26] + "~"
+                c.put(ix + 4, yy, label, label_style)
                 c.put(value_x, yy, "RUNNING" if running else "DESLIGADO", G5 if running else AMBER)
                 if it.get("policy") == "always" and sel:
                     c.put(value_x + 11, yy, "always", G2)

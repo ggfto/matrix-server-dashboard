@@ -325,15 +325,17 @@ class WebMirror:
                 try:
                     while True:
                         with mirror.cond:
-                            if mirror.frame_id == seen:
+                            if mirror.frame_id == seen and mirror.palette_id == palette_seen:
                                 mirror.cond.wait(timeout=15)
                             canvas, seen_now = mirror.canvas, mirror.frame_id
-                        if canvas is None or seen_now == seen:
+                        # A theme change recolors the page right away, even when the screen is still.
+                        recolor = mirror.palette_id != palette_seen
+                        if canvas is None or (seen_now == seen and not recolor):
                             self.wfile.write(b": keepalive\n\n")
                             self.wfile.flush()
                             continue
                         seen = seen_now
-                        if mirror.palette_id != palette_seen:
+                        if recolor:
                             palette_seen = mirror.palette_id
                             self.send_event("palette", mirror.palette)
                             screen = mirror.screen_factory()
