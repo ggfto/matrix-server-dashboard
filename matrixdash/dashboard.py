@@ -1992,7 +1992,7 @@ class Dashboard:
         if once:
             self.instant = True
             self.collector._slow_once()
-            self.collector._docker_ps()
+            self.collector.refresh_containers()
             self.collector.collect_fast(1)
             elapsed = at if at is not None else self.boot_duration() + 12.0
             for _ in range(3):
