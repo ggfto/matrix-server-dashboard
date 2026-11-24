@@ -18,9 +18,13 @@ CMDS=""
 for field in allowed-ips endpoints latest-handshakes transfer persistent-keepalive; do
   CMDS="${CMDS:+$CMDS, }$WG show all $field"
 done
+# !syslog and !pam_session for these reads only: they run every minute and would fill the
+# journal and auth.log. Every other sudo use keeps being logged.
 cat > "$TMP" <<RULE
 # Matrix dashboard: read-only WireGuard peer status (no private keys).
-$RUN_USER ALL=(root) NOPASSWD: $CMDS
+Cmnd_Alias MATRIX_WG_READ = $CMDS
+Defaults!MATRIX_WG_READ !syslog, !pam_session
+$RUN_USER ALL=(root) NOPASSWD: MATRIX_WG_READ
 RULE
 visudo -cf "$TMP" >/dev/null
 install -m 0440 -o root -g root "$TMP" "$TARGET"

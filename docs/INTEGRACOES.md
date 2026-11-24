@@ -55,7 +55,9 @@ sudo ./system/wireguard-sudo.sh        # regra em /etc/sudoers.d/matrix-dashboar
 ```
 
 A regra permite apenas `wg show all` com `allowed-ips`, `endpoints`, `latest-handshakes`,
-`transfer` e `persistent-keepalive`, que não mostram chave privada.
+`transfer` e `persistent-keepalive`, que não mostram chave privada. Os peers são lidos a cada
+60 s (`"wireguard": {"peers_every": 60}`), e essas 5 leituras não vão para o log do sudo
+(`!syslog`, `!pam_session`), para não encher o journal; o resto do sudo continua registrado.
 
 - **Serviços**: a linha `wg-quick@wg0` vira `ONLINE 10.8.0.1/24 1/2 peers`.
 - **Mapa da rede (`W`)**: seção `WIREGUARD // wg0` com cada peer: IPs permitidos, tráfego ao

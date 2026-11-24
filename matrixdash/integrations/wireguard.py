@@ -80,6 +80,9 @@ class WireGuardIntegration(Integration):
         self.prev_counters: dict[str, tuple[float, int, int]] = {}
         self.prev_online: dict[str, bool] = {}
         self.prev_ifaces: set[str] | None = None
+        # Peers need sudo; read them less often than the interface counters (default every 60 s).
+        self.peers_cache: dict[str, dict[str, dict[str, Any]]] | None = None
+        self.peers_at = float("-inf")
         cfg = self.config.get("wireguard")
         self.names = {str(k): str(v) for k, v in ((cfg if isinstance(cfg, dict) else {}).get("names") or {}).items()}
 
@@ -109,6 +112,17 @@ class WireGuardIntegration(Integration):
         dt = now - prev[0]
         return max(0.0, (rx - prev[1]) / dt), max(0.0, (tx - prev[2]) / dt)
 
+    def peers_every(self) -> float:
+        cfg = self.config.get("wireguard")
+        return max(12.0, float((cfg if isinstance(cfg, dict) else {}).get("peers_every", 60)))
+
+    def read_peers_cached(self) -> dict[str, dict[str, dict[str, Any]]] | None:
+        now = time.monotonic()
+        if now - self.peers_at >= self.peers_every():
+            self.peers_cache = read_peers()
+            self.peers_at = now
+        return self.peers_cache
+
     def read(self):
         if self.config.get("wireguard") is False or not shutil.which("wg"):
             return
@@ -116,7 +130,7 @@ class WireGuardIntegration(Integration):
         if not names:
             self.data = {"ifaces": [], "peers_known": True, "at": time.time()} if self.data else None
             return
-        peers = read_peers()
+        peers = self.read_peers_cached()
         now = time.time()
         ifaces = []
         for name in names:

@@ -52,6 +52,7 @@ def make(config=None):
 
 
 def read(integ, **kw):
+    integ.peers_at = float("-inf")  # always re-read the peers in these tests
     with mock.patch.object(wgmod, "run_cmd", fake(**kw)), \
          mock.patch.object(wgmod.shutil, "which", lambda name: "/usr/bin/wg"), \
          mock.patch.object(wgmod, "counters", lambda iface: (5000, 7000)):
@@ -86,6 +87,31 @@ class Reading(unittest.TestCase):
         d, wg = make({"wireguard": False})
         read(wg)
         self.assertFalse(wg.enabled())
+
+
+class Interval(unittest.TestCase):
+    def test_peers_are_read_once_a_minute(self):
+        d, wg = make()
+        calls = []
+        run = fake()
+
+        def counting(args, timeout=2.0, strip=True):
+            if args[:2] == ["sudo", "-n"]:
+                calls.append(args[-1])
+            return run(args, timeout, strip)
+        clock = [1000.0]
+        with mock.patch.object(wgmod, "run_cmd", counting), \
+             mock.patch.object(wgmod.shutil, "which", lambda name: "/usr/bin/wg"), \
+             mock.patch.object(wgmod, "counters", lambda iface: (5000, 7000)), \
+             mock.patch.object(wgmod.time, "monotonic", lambda: clock[0]):
+            wg.read()
+            clock[0] += 12
+            wg.read()
+            self.assertEqual(len(calls), 5)  # second read reused the peers
+            self.assertEqual(len(wg.data["ifaces"][0]["peers"]), 2)
+            clock[0] += 50
+            wg.read()
+            self.assertEqual(len(calls), 10)
 
 
 class Status(unittest.TestCase):
