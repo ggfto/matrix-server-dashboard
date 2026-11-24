@@ -146,8 +146,8 @@ def _render(cols: int, rows: int, setup=None, at: float | None = None, snap=None
     if setup:
         setup(d)
     if at is not None and at < 0:
-        at = d.boot_duration() + at
-    t = at if at is not None else d.boot_duration() + after
+        at = d.boot.duration() + at
+    t = at if at is not None else d.boot.duration() + after
     return d.render_canvas(t)
 
 

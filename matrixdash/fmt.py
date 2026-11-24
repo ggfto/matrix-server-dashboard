@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 
 def parse_size(text: str) -> float:
@@ -50,3 +51,28 @@ def fmt_uptime(seconds: float) -> str:
     if hours:
         return f"{hours}h {mins:02d}m"
     return f"{mins}m"
+
+
+def rate_short(v: float) -> str:
+    """Compact bytes/s for tight columns: 0, 512B, 12K, 1.5M."""
+    if v < 1:
+        return "0"
+    for unit in ("B", "K", "M", "G"):
+        if v < 1024 or unit == "G":
+            return f"{v:.0f}{unit}" if unit in ("B", "K") or v >= 100 else f"{v:.1f}{unit}"
+        v /= 1024
+    return "?"
+
+
+def ago(ts: float) -> str:
+    """'agora', '12min', '3h' or '5d' since an epoch timestamp."""
+    if not ts:
+        return "-"
+    sec = max(0, time.time() - ts)
+    if sec < 90:
+        return "agora"
+    if sec < 3600:
+        return f"{sec / 60:.0f}min"
+    if sec < 86400:
+        return f"{sec / 3600:.0f}h"
+    return f"{sec / 86400:.0f}d"

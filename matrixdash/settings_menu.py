@@ -5,14 +5,12 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
-import re
 import subprocess
 import threading
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
-from . import autodetect
-from .config import DEFAULT_CONFIG
+from . import autodetect, validators
+from .config import DEFAULT_CONFIG, save_user_config
 from .render.canvas import Canvas
 from .render.rain import MatrixRain
 from .sysinfo import get_local_ip, iface_for_ip, read_ipv4
@@ -21,16 +19,35 @@ from .theme import AMBER, CYAN, G1, G2, G3, G4, G5, G6, RED, SPINNER, TEXT, WHIT
 if TYPE_CHECKING:
     from .dashboard import Dashboard
 
-
 NETCFG_HELPER = "/usr/local/sbin/matrix-netcfg"
-RATE_RE = re.compile(r"^(off|\d+(\.\d+)?[KMG]?)$", re.I)
-TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class MenuBuilder:
+    """Collects the rows of the settings screen; integrations add their sections through it."""
+
+    def __init__(self, menu: SettingsMenu):
+        self.menu = menu
+        self.items: list[dict[str, Any]] = []
+
+    def header(self, label: str, info: str = ""):
+        self.items.append({"kind": "header", "label": label, "info": info})
+
+    def field(self, key: str, label: str, hint: str, validate: validators.Validator | None,
+              save: Callable[[], None] | None = None, kind: str = "text", options: list[str] | None = None):
+        self.items.append({"kind": kind, "key": key, "label": label, "hint": hint,
+                           "validate": validate, "save": save, "options": options})
+
+    def action(self, label: str, hint: str, fn: Callable[[], None], style: int = G5):
+        self.items.append({"kind": "action", "label": label, "hint": hint, "action": fn, "style": style})
+
+    def info(self, label: str, value: str):
+        self.items.append({"kind": "info", "label": label, "value": value})
 
 
 class SettingsMenu:
-    """Keyboard-driven settings screen (hotkey C): network, backup, panel, containers."""
+    """Keyboard-driven settings screen (hotkey C): network, integrations, panel, containers."""
 
-    def __init__(self, dash: "Dashboard"):
+    def __init__(self, dash: Dashboard):
         self.d = dash
         self.active = False
         self.items: list[dict[str, Any]] = []
@@ -41,7 +58,6 @@ class SettingsMenu:
         self.edit_buffer: str | None = None
         self.message: tuple[str, int] | None = None
         self.net_dirty = False
-        self.has_backup = False
         self.busy = ""
 
     # --- data
@@ -49,9 +65,6 @@ class SettingsMenu:
     def iface(self) -> str:
         iface = str(self.d.config.get("network_interface") or self.d.collector.snap.iface or "-")
         return iface if iface not in ("-", "auto") else autodetect.default_iface()
-
-    def backup_config_path(self) -> Path | None:
-        return self.d.backup_dir / "backup.json" if self.d.backup_dir else None
 
     def load(self):
         net = read_ipv4(self.iface())
@@ -75,194 +88,70 @@ class SettingsMenu:
         th = cfg.get("thresholds", {})
         for key in ("cpu", "ram", "disk", "temperature"):
             v[f"th_{key}"] = str(th.get(key, DEFAULT_CONFIG["thresholds"][key]))
-
-        path = self.backup_config_path()
-        bcfg = {}
-        if path and path.exists():
-            try:
-                bcfg = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                bcfg = {}
-        slots = []
-        for part in str(bcfg.get("bwlimit", "08:00,3M 23:00,8M")).split():
-            if "," in part:
-                slots.append(part.split(",", 1))
-        if len(slots) >= 2:
-            (v["bk_day_from"], v["bk_day_rate"]), (v["bk_night_from"], v["bk_night_rate"]) = slots[0], slots[1]
-        else:
-            v["bk_day_from"], v["bk_day_rate"], v["bk_night_from"], v["bk_night_rate"] = "08:00", "3M", "23:00", "8M"
-        v["bk_daily"] = str(bcfg.get("daily_sync_at", "02:00"))
-        v["ic_limit"] = str((cfg.get("icloud") or {}).get("limit", "off"))
-        self.has_backup = bool(path and path.exists())
+        for integ in self.d.integrations:
+            integ.menu_load(v)
 
     def build(self):
-        items: list[dict[str, Any]] = []
-
-        def header(label: str, info: str = ""):
-            items.append({"kind": "header", "label": label, "info": info})
-
-        def field(key: str, label: str, hint: str, validate, save=None, kind: str = "text", options=None):
-            items.append({"kind": kind, "key": key, "label": label, "hint": hint,
-                          "validate": validate, "save": save, "options": options})
-
-        def action(label: str, hint: str, fn, style: int = G5):
-            items.append({"kind": "action", "label": label, "hint": hint, "action": fn, "style": style})
-
+        m = MenuBuilder(self)
         net_now = self.sysinfo
-        header("REDE", f"atual: {net_now['ip']}/{net_now['prefix']} via {net_now['gateway'] or '-'} ({net_now['mode']})")
+        m.header("REDE", f"atual: {net_now['ip']}/{net_now['prefix']} via {net_now['gateway'] or '-'} ({net_now['mode']})")
         if not os.path.exists(NETCFG_HELPER):
-            items.append({"kind": "header", "label": "  só leitura",
-                          "info": "para editar a rede daqui: sudo ./install_hotkeys_sudo.sh (Ubuntu/netplan)"})
+            m.header("  só leitura", "para editar a rede daqui: sudo ./install_hotkeys_sudo.sh (Ubuntu/netplan)")
         else:
-            field("net_mode", "Modo IPv4", "FIXO = IP definido aqui · DHCP = o roteador escolhe", None,
-                  self.mark_net, "choice", ["FIXO", "DHCP"])
+            m.field("net_mode", "Modo IPv4", "FIXO = IP definido aqui · DHCP = o roteador escolhe", None,
+                    self.mark_net, "choice", ["FIXO", "DHCP"])
             if self.values.get("net_mode") == "FIXO":
-                field("net_ip", "Endereço IP", "ex.: 192.168.1.100", self.valid_ipv4, self.mark_net)
-                field("net_prefix", "Prefixo (máscara)", "24 = 255.255.255.0", self.valid_prefix, self.mark_net)
-                field("net_gateway", "Gateway (roteador)", "ex.: 192.168.1.1", self.valid_ipv4, self.mark_net)
-                field("net_dns", "DNS", "separe com vírgula · ex.: 192.168.1.1, 1.1.1.1", self.valid_dns, self.mark_net)
-            action("Aplicar configuração de rede", "pede confirmação · se o roteador não responder, volta sozinho",
-                   self.apply_network, AMBER)
+                m.field("net_ip", "Endereço IP", "ex.: 192.168.1.100", validators.ipv4, self.mark_net)
+                m.field("net_prefix", "Prefixo (máscara)", "24 = 255.255.255.0", validators.prefix, self.mark_net)
+                m.field("net_gateway", "Gateway (roteador)", "ex.: 192.168.1.1", validators.ipv4, self.mark_net)
+                m.field("net_dns", "DNS", "separe com vírgula · ex.: 192.168.1.1, 1.1.1.1", validators.dns, self.mark_net)
+            m.action("Aplicar configuração de rede", "pede confirmação · se o roteador não responder, volta sozinho",
+                     self.apply_network, AMBER)
 
-        if self.has_backup:
-            header("BACKUP GOOGLE DRIVE", "vale na hora, sem reiniciar o backup")
-            field("bk_day_rate", "Limite de dia", "ex.: 3M (MB/s) · off = sem limite", self.valid_rate, self.save_backup)
-            field("bk_day_from", "Dia começa às", "HH:MM", self.valid_time, self.save_backup)
-            field("bk_night_rate", "Limite de noite", "ex.: 8M (MB/s) · off = sem limite", self.valid_rate, self.save_backup)
-            field("bk_night_from", "Noite começa às", "HH:MM", self.valid_time, self.save_backup)
-            field("bk_daily", "Sincronização diária às", "HH:MM · depois da cópia inicial", self.valid_time, self.save_backup)
+        for integ in self.d.integrations:
+            integ.menu(m)
 
-        if (self.d.config.get("icloud") or {}).get("container"):
-            ic = self.d.collector.snap.icloud or {}
-            header("ICLOUD → SERVIDOR", f"{ic.get('items', 0)}/{ic.get('total', 0) or '?'} itens · {ic.get('status', '-')}")
-            field("ic_limit", "Limite de download", "a Apple entrega ~5 MB/s · limite vale na hora",
-                  None, self.save_icloud, "choice", ["off", "1M", "2M", "3M", "5M"])
-            running = ic.get("state") == "running"
-            action("Retomar download" if not running else "Pausar download",
-                   "para/liga o container do iCloud (mesmo que a tecla P)", self.toggle_icloud_menu, AMBER)
-
-        header("PAINEL")
-        field("operator", "Nome do operador", "aparece no retrato e no boot", self.valid_name, self.save_panel)
-        field("fps", "Quadros por segundo", "2 a 30 · menos = menos CPU", self.valid_int(2, 30), self.save_panel)
-        field("density", "Densidade da chuva", "0.05 a 1.00", self.valid_float(0.05, 1.0), self.save_panel)
-        field("screen_off", "Apagar tela automático", "apaga o monitor no horário abaixo · tecla acende por 5 min",
-              None, self.save_panel, "choice", ["DESLIGADO", "LIGADO"])
-        field("screen_from", "  apagar às", "HH:MM", self.valid_time, self.save_panel)
-        field("screen_to", "  acender às", "HH:MM", self.valid_time, self.save_panel)
-        field("th_cpu", "Alerta de CPU (%)", "10 a 100", self.valid_int(10, 100), self.save_panel)
-        field("th_ram", "Alerta de RAM (%)", "10 a 100", self.valid_int(10, 100), self.save_panel)
-        field("th_disk", "Alerta de disco (%)", "10 a 100", self.valid_int(10, 100), self.save_panel)
-        field("th_temperature", "Alerta de temperatura (°C)", "40 a 110", self.valid_int(40, 110), self.save_panel)
+        m.header("PAINEL")
+        save = self.save_panel
+        m.field("operator", "Nome do operador", "aparece no retrato e no boot", validators.name, save)
+        m.field("fps", "Quadros por segundo", "2 a 30 · menos = menos CPU", validators.int_range(2, 30), save)
+        m.field("density", "Densidade da chuva", "0.05 a 1.00", validators.float_range(0.05, 1.0), save)
+        m.field("screen_off", "Apagar tela automático", "apaga o monitor no horário abaixo · tecla acende por 5 min",
+                None, save, "choice", ["DESLIGADO", "LIGADO"])
+        m.field("screen_from", "  apagar às", "HH:MM", validators.clock, save)
+        m.field("screen_to", "  acender às", "HH:MM", validators.clock, save)
+        m.field("th_cpu", "Alerta de CPU (%)", "10 a 100", validators.int_range(10, 100), save)
+        m.field("th_ram", "Alerta de RAM (%)", "10 a 100", validators.int_range(10, 100), save)
+        m.field("th_disk", "Alerta de disco (%)", "10 a 100", validators.int_range(10, 100), save)
+        m.field("th_temperature", "Alerta de temperatura (°C)", "40 a 110", validators.int_range(40, 110), save)
 
         snap = self.d.collector.snap
-        header("CONTAINERS", "◂ ▸ escolhe a ação · OK executa")
+        m.header("CONTAINERS", "◂ ▸ escolhe a ação · OK executa")
         policies = self.restart_policies()
         for ct in sorted(snap.containers, key=lambda x: x.name):
             actions = ["reiniciar", "desligar"] if ct.state == "running" else ["ligar"]
-            items.append({"kind": "container", "label": ct.name, "state": ct.state, "actions": actions,
-                          "choice": 0, "policy": policies.get(ct.name, ""),
-                          "hint": (f"◂ ▸ escolhe: {' / '.join(actions)} · OK executa" if len(actions) > 1
-                                   else f"OK para {actions[0]} {ct.name}")})
+            m.items.append({"kind": "container", "label": ct.name, "state": ct.state, "actions": actions,
+                            "choice": 0, "policy": policies.get(ct.name, ""),
+                            "hint": (f"◂ ▸ escolhe: {' / '.join(actions)} · OK executa" if len(actions) > 1
+                                     else f"OK para {actions[0]} {ct.name}")})
 
-        header("SISTEMA")
+        m.header("SISTEMA")
         ts = snap.tailscale or {}
-        info = [
-            ("Hostname", snap.hostname),
-            ("Interface", f"{self.iface()} · MAC {net_now.get('mac', '')}"),
-            ("IPv4", f"{net_now['ip']}/{net_now['prefix']} via {net_now['gateway'] or '-'}"),
-            ("IPv6", net_now.get("ipv6", "") or "-"),
-            ("DNS em uso", net_now.get("dns", "") or "-"),
-            ("Tailscale", f"{ts.get('ip', '-')} · {ts.get('state', '-')}"
-                          + (f" · chave expira em {ts['expiry_days']}d" if ts.get("expiry_days") is not None else "")),
-            ("Kernel", snap.kernel),
-        ]
-        for label, value in info:
-            items.append({"kind": "info", "label": label, "value": value})
-        self.items = items
-
-    # --- validators (return error text or None)
-
-    @staticmethod
-    def valid_ipv4(value: str) -> str | None:
-        try:
-            ipaddress.IPv4Address(value.strip())
-            return None
-        except ValueError:
-            return "IP inválido"
-
-    @staticmethod
-    def valid_prefix(value: str) -> str | None:
-        return None if value.isdigit() and 8 <= int(value) <= 30 else "use um número de 8 a 30"
-
-    @staticmethod
-    def valid_dns(value: str) -> str | None:
-        parts = [x.strip() for x in value.split(",") if x.strip()]
-        if not 1 <= len(parts) <= 4:
-            return "informe de 1 a 4 servidores"
-        for part in parts:
-            try:
-                ipaddress.ip_address(part)
-            except ValueError:
-                return f"DNS inválido: {part}"
-        return None
-
-    @staticmethod
-    def valid_rate(value: str) -> str | None:
-        return None if RATE_RE.match(value.strip()) else "use algo como 3M, 500K ou off"
-
-    @staticmethod
-    def valid_time(value: str) -> str | None:
-        return None if TIME_RE.match(value.strip()) else "use HH:MM, ex.: 23:00"
-
-    @staticmethod
-    def valid_name(value: str) -> str | None:
-        return None if 1 <= len(value.strip()) <= 20 else "de 1 a 20 caracteres"
-
-    @staticmethod
-    def valid_int(lo: int, hi: int):
-        return lambda value: None if value.strip().isdigit() and lo <= int(value) <= hi else f"número de {lo} a {hi}"
-
-    @staticmethod
-    def valid_float(lo: float, hi: float):
-        def check(value: str) -> str | None:
-            try:
-                return None if lo <= float(value) <= hi else f"número de {lo} a {hi}"
-            except ValueError:
-                return f"número de {lo} a {hi}"
-        return check
+        m.info("Hostname", snap.hostname)
+        m.info("Interface", f"{self.iface()} · MAC {net_now.get('mac', '')}")
+        m.info("IPv4", f"{net_now['ip']}/{net_now['prefix']} via {net_now['gateway'] or '-'}")
+        m.info("IPv6", net_now.get("ipv6", "") or "-")
+        m.info("DNS em uso", net_now.get("dns", "") or "-")
+        m.info("Tailscale", f"{ts.get('ip', '-')} · {ts.get('state', '-')}"
+                            + (f" · chave expira em {ts['expiry_days']}d" if ts.get("expiry_days") is not None else ""))
+        m.info("Kernel", snap.kernel)
+        self.items = m.items
 
     # --- savers
-
-    def save_icloud(self):
-        err = self.d.set_icloud_limit(self.values["ic_limit"])
-        limit = self.values["ic_limit"]
-        self.message = (err, RED) if err else (f"limite do iCloud: {'sem limite' if limit == 'off' else limit + 'B/s'}", G5)
-
-    def toggle_icloud_menu(self):
-        self.d.toggle_icloud()
-        self.message = ("aguarde alguns segundos...", CYAN)
 
     def mark_net(self):
         self.net_dirty = True
         self.message = ("rede alterada · use 'Aplicar configuração de rede' para valer", AMBER)
-
-    def save_backup(self):
-        path = self.backup_config_path()
-        if not path:
-            return
-        v = self.values
-        try:
-            cfg = json.loads(path.read_text(encoding="utf-8"))
-            cfg["bwlimit"] = (f"{v['bk_day_from']},{v['bk_day_rate'].upper().replace('OFF', 'off')} "
-                              f"{v['bk_night_from']},{v['bk_night_rate'].upper().replace('OFF', 'off')}")
-            cfg["daily_sync_at"] = v["bk_daily"]
-            tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            os.replace(tmp, path)
-            self.message = ("backup salvo · limite novo vale em segundos", G5)
-            self.d.collector.emit("CONFIG", f"backup: {cfg['bwlimit']} · diário {cfg['daily_sync_at']}", CYAN)
-        except (OSError, ValueError) as exc:
-            self.message = (f"erro ao salvar: {exc}"[:70], RED)
 
     def save_panel(self):
         v = self.values
@@ -279,14 +168,13 @@ class SettingsMenu:
         cfg["screen_off"] = {"enabled": v["screen_off"] == "LIGADO", "from": v["screen_from"], "to": v["screen_to"]}
         for key in ("cpu", "ram", "disk", "temperature"):
             cfg["thresholds"][key] = int(v[f"th_{key}"])
-        try:
-            raw = json.loads(d.config_path.read_text(encoding="utf-8")) if d.config_path.exists() else {}
+
+        def copy_panel_keys(raw: dict[str, Any]):
             for key in ("operator", "fps", "matrix_density", "screen_off", "thresholds"):
                 if key in cfg:
                     raw[key] = cfg[key]
-            tmp = d.config_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            os.replace(tmp, d.config_path)
+        try:
+            save_user_config(d.config_path, copy_panel_keys)
             self.message = ("painel salvo", G5)
         except (OSError, ValueError) as exc:
             self.message = (f"erro ao salvar: {exc}"[:70], RED)
@@ -313,8 +201,8 @@ class SettingsMenu:
             args = ["dhcp"]
             lines = ["Modo: IP automático (DHCP)", "O IP do servidor passa a ser escolhido pelo roteador."]
         else:
-            for key, check in (("net_ip", self.valid_ipv4), ("net_prefix", self.valid_prefix),
-                               ("net_gateway", self.valid_ipv4), ("net_dns", self.valid_dns)):
+            for key, check in (("net_ip", validators.ipv4), ("net_prefix", validators.prefix),
+                               ("net_gateway", validators.ipv4), ("net_dns", validators.dns)):
                 err = check(v[key])
                 if err:
                     self.message = (f"{err} ({key.replace('net_', '')})", RED)

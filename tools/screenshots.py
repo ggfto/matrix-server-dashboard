@@ -191,7 +191,7 @@ def make_dashboard(cols: int, rows: int) -> Dashboard:
     now_wall, now_mono = time.time(), time.monotonic()
     for i, (tag, text, style) in enumerate(EVENTS):
         d.collector.events.append(Event(now_wall - (len(EVENTS) - i) * 47, now_mono - 60, tag, text, style))
-    d.build_boot_lines(snap)
+    d.boot.build_lines(snap)
     random.seed(7)
     for _ in range(120):
         d.rain.resize(cols, rows)
@@ -204,8 +204,8 @@ def shot(name: str, cols: int, rows: int, out: Path, setup=None, at: float | Non
     if setup:
         setup(d)
     if at is not None and at < 0:  # negative = seconds before the end of the boot sequence
-        at = d.boot_duration() + at
-    t = at if at is not None else d.boot_duration() + 14.0
+        at = d.boot.duration() + at
+    t = at if at is not None else d.boot.duration() + 14.0
     canvas = d.render_canvas(t)
     paint(canvas, out / name)
 

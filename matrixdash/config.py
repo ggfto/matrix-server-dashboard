@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import autodetect
+from .storage import write_json
 
 DEFAULT_CONFIG: dict[str, Any] = {
     # "" = "<HOSTNAME> // MATRIX SERVER MONITOR"
@@ -64,3 +65,13 @@ def merge_config(path: Path) -> dict[str, Any]:
         except Exception as exc:
             print(f"Could not read {path}: {exc}", file=sys.stderr)
     return autodetect.resolve(config)
+
+
+def save_user_config(path: Path, mutate: Callable[[dict[str, Any]], Any], create: bool = True):
+    """Apply `mutate` to the JSON in config.json and write it back; only keys it touches change.
+
+    With create=False a missing file is an error (OSError), as for settings that only make
+    sense once the file exists."""
+    raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() or not create else {}
+    mutate(raw)
+    write_json(path, raw, indent=2)
