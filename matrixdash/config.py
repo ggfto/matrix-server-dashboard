@@ -20,6 +20,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "image": "assets/portrait.png",
     "fps": 12,
     "matrix_density": 0.45,
+    # color theme: matrix, ambar, gelo, synthwave, mono (menu C -> PAINEL -> Tema)
+    "theme": "matrix",
+    # optional per-color overrides on top of the theme: {"accent": "ff00ff", "g5": "39ff6a"}
+    "theme_colors": {},
     "boot_animation": True,
     "console_palette": True,
     "ping_host": "1.1.1.1",

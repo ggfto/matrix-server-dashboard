@@ -65,6 +65,8 @@ MongoDB recebem teste TCP.
 | `network_interface` | `"auto"` | interface dos gráficos de rede |
 | `systemd_units` | `["auto"]` | serviços do host: `{"name": "RÓTULO", "unit": "nome-da-unit"}` |
 | `checks` | `["auto"]` | testes de endpoint, veja abaixo |
+| `theme` | `"matrix"` | tema de cores: `matrix`, `ambar`, `gelo`, `synthwave`, `mono` (também pelo menu `C`) |
+| `theme_colors` | `{}` | troca cores do tema, ex.: `{"accent": "ff00ff"}`; papéis: `g0`…`g6` (do mais escuro ao mais claro), `text`, `accent`, `red`, `amber`, `red_bg`, `white` |
 | `hide_containers` | `[]` | nomes de containers que não aparecem |
 | `runtimes` | `["auto"]` | de onde vêm os containers: `docker`, `k3s`; `auto` usa os que existirem na máquina |
 | `wireguard` | `{}` | `{"names": {"10.8.0.2": "casa"}}` dá nome aos peers; `false` esconde |

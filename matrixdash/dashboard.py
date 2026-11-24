@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, TypeVar
 
-from . import VERSION, autodetect, health
+from . import VERSION, autodetect, health, theme
 from .collector import Collector
 from .config import merge_config
 from .fmt import fmt_uptime
@@ -91,6 +91,8 @@ class Dashboard:
         self.image_enabled = True
         self.boot_enabled = bool(self.config.get("boot_animation", True))
 
+        self.theme = theme.apply(str(self.config.get("theme") or theme.DEFAULT_THEME),
+                                 self.config.get("theme_colors") or {})
         self.linux_console = os.environ.get("TERM", "") == "linux"
         self.terminal = Terminal(self.linux_console and bool(self.config.get("console_palette", True)))
         self.screen = Screen(SGR_LINUX if self.linux_console else SGR_256)
@@ -372,6 +374,15 @@ class Dashboard:
             sections.append(self.agent)
         return sections
 
+    def set_theme(self, name: str) -> str:
+        """Switch colors now: terminal, Linux console palette and open web pages."""
+        self.theme = theme.apply(name, self.config.get("theme_colors") or {})
+        self.screen = Screen(SGR_LINUX if self.linux_console else SGR_256)
+        self.terminal.load_palette()
+        if self.web:
+            self.web.palette_changed()
+        return self.theme
+
     def toggle_view(self, name: str):
         self.view = None if self.view == name else name
         self.netmap_open = False
@@ -539,8 +550,8 @@ class Dashboard:
         if not web_cfg.get("enabled"):
             return
         try:
-            self.web = WebMirror(web_cfg, lambda: Screen(SGR_LINUX),
-                                 {n: rgb for n, rgb in LINUX_PALETTE.items()}, self.collector.hostname)
+            # The mirror keeps a reference to the palette, so a theme change reaches the page.
+            self.web = WebMirror(web_cfg, lambda: Screen(SGR_LINUX), LINUX_PALETTE, self.collector.hostname)
             self.web.start()
             self.collector.emit("SYSTEM", f"web mirror on port {self.web.port}", G4)
         except OSError as exc:

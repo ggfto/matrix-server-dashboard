@@ -9,7 +9,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import autodetect, validators
+from . import autodetect, theme, validators
 from .config import DEFAULT_CONFIG, save_user_config
 from .render.canvas import Canvas
 from .render.rain import MatrixRain
@@ -86,6 +86,7 @@ class SettingsMenu:
         v["operator"] = self.d.operator
         v["fps"] = str(self.d.fps)
         v["density"] = f"{float(cfg.get('matrix_density', 0.45)):.2f}"
+        v["theme"] = self.d.theme
         screen = cfg.get("screen_off") or {}
         v["screen_off"] = "LIGADO" if screen.get("enabled") else "DESLIGADO"
         v["screen_from"] = str(screen.get("from", "00:00"))
@@ -119,6 +120,8 @@ class SettingsMenu:
         m.header("PAINEL")
         save = self.save_panel
         m.field("operator", "Nome do operador", "aparece no retrato e no boot", validators.name, save)
+        m.field("theme", "Tema de cores", "◂ ▸ troca na hora · " + " · ".join(theme.THEME_LABELS.values()),
+                None, save, "choice", list(theme.THEMES))
         m.field("fps", "Quadros por segundo", "2 a 30 · menos = menos CPU", validators.int_range(2, 30), save)
         m.field("density", "Densidade da chuva", "0.05 a 1.00", validators.float_range(0.05, 1.0), save)
         m.field("screen_off", "Apagar tela automático", "apaga o monitor no horário abaixo · tecla acende por 5 min",
@@ -170,6 +173,8 @@ class SettingsMenu:
         cfg["operator"] = d.operator
         d.fps = int(v["fps"])
         cfg["fps"] = d.fps
+        if v["theme"] != d.theme:
+            cfg["theme"] = d.set_theme(v["theme"])
         density = float(v["density"])
         if abs(density - float(cfg.get("matrix_density", 0.45))) > 1e-6:
             cfg["matrix_density"] = round(density, 2)
@@ -179,7 +184,7 @@ class SettingsMenu:
             cfg["thresholds"][key] = int(v[f"th_{key}"])
 
         def copy_panel_keys(raw: dict[str, Any]):
-            for key in ("operator", "fps", "matrix_density", "screen_off", "thresholds"):
+            for key in ("operator", "fps", "theme", "matrix_density", "screen_off", "thresholds"):
                 if key in cfg:
                     raw[key] = cfg[key]
         try:

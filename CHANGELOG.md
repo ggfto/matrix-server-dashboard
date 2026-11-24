@@ -9,6 +9,8 @@
 - k3s: workloads do cluster no painel de serviços (prontos/desejados, CPU, memória, erros dos
   pods como alerta) e "reiniciar" pelo menu, com uma ServiceAccount própria
   (`system/k8s/make-kubeconfig.sh`).
+- Temas de cores prontos (matrix, âmbar, gelo, synthwave, mono) no menu `C`, trocando na hora
+  no terminal, no tty1 e na página web; chaves `theme` e `theme_colors`.
 - WireGuard: estado da interface e dos peers (handshake, endpoint, tráfego) na linha de
   serviço, no mapa da rede e no boot, com alerta para túnel site a site parado. Peers pedem
   uma regra de sudo só de leitura (`system/wireguard-sudo.sh`).

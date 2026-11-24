@@ -220,6 +220,11 @@ def main():
     shot("settings.png", 160, 46, out, lambda d: d.menu.open())
     shot("medium.png", 130, 40, out)
     shot("compact.png", 92, 26, out)
+    # One preview per color theme (menu C -> PAINEL -> Tema).
+    (out / "temas").mkdir(exist_ok=True)
+    for name in theme.THEMES:
+        shot(f"temas/{name}.png", 150, 44, out, lambda d, name=name: d.set_theme(name))
+    theme.apply(theme.DEFAULT_THEME)
 
 
 if __name__ == "__main__":

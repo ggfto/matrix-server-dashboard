@@ -42,10 +42,13 @@ class Terminal:
                 tty.setcbreak(sys.stdin.fileno())
             except Exception:
                 self.old_term = None
-        out = [ALT_SCREEN, CLEAR, HIDE_CURSOR, WRAP_OFF]
+        self.write(ALT_SCREEN + CLEAR + HIDE_CURSOR + WRAP_OFF)
+        self.load_palette()
+
+    def load_palette(self):
+        """Program the Linux console's 16 colors with the current theme (no-op on other terminals)."""
         if self.use_palette:
-            out += [f"\x1b]P{n:X}{rgb}" for n, rgb in LINUX_PALETTE.items()]
-        self.write("".join(out))
+            self.write("".join(f"\x1b]P{n:X}{rgb}" for n, rgb in LINUX_PALETTE.items()))
 
     def restore(self):
         if self.old_term is not None:

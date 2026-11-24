@@ -31,6 +31,17 @@ Docker e seus endpoints, rede, Tailscale e Claude Code.
   glitch e paleta verde no console.
 - Leve: Python puro (psutil + Pillow), coleta em threads e redesenho só do que mudou.
 
+### Temas de cores
+
+Escolha em **`C` → PAINEL → Tema de cores**: troca na hora, no terminal, no monitor (tty1) e
+na página web aberta.
+
+| MATRIX | ÂMBAR | GELO |
+|---|---|---|
+| ![matrix](docs/screenshots/temas/matrix.png) | ![âmbar](docs/screenshots/temas/ambar.png) | ![gelo](docs/screenshots/temas/gelo.png) |
+| **SYNTHWAVE** | **MONO** | |
+| ![synthwave](docs/screenshots/temas/synthwave.png) | ![mono](docs/screenshots/temas/mono.png) | |
+
 | Boot | Menu de configurações |
 |---|---|
 | ![Boot](docs/screenshots/boot.png) | ![Configurações](docs/screenshots/settings.png) |
