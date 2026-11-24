@@ -88,6 +88,7 @@ class Snapshot:
     backup: dict[str, Any] | None = None
     tailscale: dict[str, Any] | None = None
     icloud: dict[str, Any] | None = None
+    argocd: dict[str, Any] | None = None
     usage: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
     netmap: dict[str, Any] | None = None

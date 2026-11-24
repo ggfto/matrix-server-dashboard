@@ -18,10 +18,12 @@ from . import VERSION, autodetect, health
 from .collector import Collector
 from .config import merge_config
 from .fmt import fmt_uptime
-from .integrations import ClaudeIntegration, Integration
+from .integrations import ArgoCDIntegration, ClaudeIntegration, Integration
 from .models import Snapshot
 from .panels.agent import AgentSection
+from .panels.argocd import ArgoPanel, ArgoSection
 from .panels.backup import BackupPanel
+from .panels.base import Panel
 from .panels.boot import BootScreen
 from .panels.console import ConsolePanel
 from .panels.header import HeaderPanel
@@ -65,7 +67,7 @@ I = TypeVar("I", bound=Integration)
 # Display order of the key bar. Keys owned by an integration only show while it is enabled.
 HOTKEYS = [
     ("H", "ajuda"), ("C", "config"), ("B", "backup"), ("S", "sync agora"), ("V", "rede"), ("P", "icloud"),
-    ("U", "uso IA"), ("W", "mapa rede"), ("X", "terminal"), ("N", "teste rede"), ("E", "economia"),
+    ("U", "uso IA"), ("A", "argocd"), ("W", "mapa rede"), ("X", "terminal"), ("N", "teste rede"), ("E", "economia"),
     ("T", "apagar tela"), ("M", "chuva"), ("I", "retrato"), ("D", "desligar"), ("R", "reiniciar"),
 ]
 IGNORED_KEYS = ("", "esc", "enter", " ", "up", "down", "left", "right", "backspace")
@@ -121,6 +123,8 @@ class Dashboard:
         self.web: WebMirror | None = None
         self.usage_mode = "auto"
         self.netmap_open = False
+        # full-screen view shown in place of the system and services panels ("argocd")
+        self.view: str | None = None
         self.auto_blanked = False
         self.wake_until = 0.0
 
@@ -138,6 +142,8 @@ class Dashboard:
         self.keybar = KeyBar(self)
         self.overlays = Overlays(self)
         self.agent = AgentSection()
+        self.argo_section = ArgoSection()
+        self.views: dict[str, Panel] = {"argocd": ArgoPanel(self)}
 
     def integration(self, kind: type[I]) -> I:
         return self.collector.integration(kind)
@@ -232,6 +238,7 @@ class Dashboard:
             self.open_shell()
         elif k == "w":
             self.netmap_open = not self.netmap_open
+            self.view = None
             self.screen.invalidate()
             if self.netmap_open and not self.collector.snap.netmap:
                 self.notify("mapeando a rede... primeira varredura leva ~5 s", CYAN, 4)
@@ -358,7 +365,17 @@ class Dashboard:
         return level(value, float(self.thresholds.get(metric, 999)))
 
     def service_sections(self) -> list[ServicesSection]:
-        return [self.agent] if self.integration(ClaudeIntegration).enabled() else []
+        sections: list[ServicesSection] = []
+        if self.integration(ArgoCDIntegration).enabled():
+            sections.append(self.argo_section)
+        if self.integration(ClaudeIntegration).enabled():
+            sections.append(self.agent)
+        return sections
+
+    def toggle_view(self, name: str):
+        self.view = None if self.view == name else name
+        self.netmap_open = False
+        self.screen.invalidate()
 
     def alerts(self, s: Snapshot) -> list[str]:
         out = [b.alert for b in health.thresholds(s, self.thresholds) if b.active]
@@ -483,6 +500,8 @@ class Dashboard:
 
         if self.netmap_open:
             self.netmap.draw(c, s, 0, body_y, self.width, body_h, t)
+        elif self.view in self.views:
+            self.views[self.view].draw(c, s, 0, body_y, self.width, body_h, t)
         elif show_portrait or left_w < 150:
             system_h = 15 if body_h >= 38 else max(10, body_h // 2 - 2)
             self.system.draw(c, s, 0, body_y, left_w, system_h, t)
@@ -491,7 +510,7 @@ class Dashboard:
             sys_w = left_w * 2 // 5
             self.system.draw(c, s, 0, body_y, sys_w, body_h, t)
             self.services.draw(c, s, sys_w, body_y, left_w - sys_w, body_h, t)
-        if show_portrait and not self.netmap_open:
+        if show_portrait and not self.netmap_open and self.view is None:
             if self.usage_page_active(s, t):
                 self.usage.draw(c, s, left_w, body_y, portrait_w, body_h, t)
             else:

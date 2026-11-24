@@ -15,6 +15,9 @@ from .usage import limit_style, reset_label
 
 
 class AgentSection(ServicesSection):
+    def reserve(self, s: Snapshot) -> int:
+        return 5
+
     def draw(self, rows: ServiceRows, s: Snapshot, t: float):
         c, ix, iw, bottom = rows.c, rows.ix, rows.iw, rows.bottom
         col_state, col_up, wide = rows.col_state, rows.col_up, rows.wide

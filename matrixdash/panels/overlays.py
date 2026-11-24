@@ -23,6 +23,7 @@ class Overlays(Panel):
                 ("V", "liberar / limitar a banda do backup (turbo)"),
                 ("P", "pausar / retomar o download do iCloud"),
                 ("U", "relatório de uso do Claude: auto / retrato / relatório"),
+                ("A", "Argo CD: sync e saúde de todas as applications"),
                 ("W", "mapa da rede: LAN (cabo / wi-fi), Tailscale, Docker"),
                 ("X", "abrir terminal (exit volta ao painel; na web abre no navegador)"),
                 ("N", "teste de velocidade da internet (~35 MB)"),

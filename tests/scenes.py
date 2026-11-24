@@ -135,6 +135,32 @@ def netmap_state() -> tuple[dict, dict]:
     return netmap, traffic
 
 
+def argocd_items() -> list[dict]:
+    def app(name, ns, sync="Synced", health="Healthy", phase="Succeeded", msg="", days=3):
+        return {"metadata": {"name": name, "namespace": "argocd"},
+                "spec": {"project": "default", "destination": {"namespace": ns},
+                         "source": {"repoURL": "https://example.com/infra.git", "path": f"k8s/{ns}",
+                                    "targetRevision": "main"},
+                         "syncPolicy": {"automated": {"selfHeal": True}}},
+                "status": {"sync": {"status": sync, "revision": "a1b2c3d4e5f6"}, "health": {"status": health},
+                           "operationState": {"phase": phase, "message": msg,
+                                              "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                                                          time.gmtime(WALL - days * 86400))}}}
+    return [app("shop", "shop", health="Degraded", days=0.02), app("blog", "blog", sync="OutOfSync", days=0.5),
+            app("billing", "billing", phase="Failed", msg="one or more objects failed to apply: quota exceeded"),
+            app("home", "home"), app("media", "media", days=12), app("monitoring", "monitoring", days=30)]
+
+
+def k3s_containers() -> list:
+    from matrixdash.models import Container
+    rows = [("shop/api", "pending", "unhealthy", "ImagePullBackOff", "shop 0/1", None, ""),
+            ("home/assistant", "running", "healthy", "", "home 1/1", 2.1, "410M"),
+            ("media/jellyfin", "running", "healthy", "", "media 1/1", 0.8, "260M"),
+            ("monitoring/grafana", "running", "starting", "", "monitoring 1/2", 0.3, "90M")]
+    return [Container(name=n, state=st, health=h, age="3d", exit_code=r, image="app:1", ports=p, cpu=cpu,
+                      mem=mem, runtime="k3s", display=n.split("/")[1]) for n, st, h, r, p, cpu, mem in rows]
+
+
 # ------------------------------------------------------------------- scenes
 
 def _render(cols: int, rows: int, setup=None, at: float | None = None, snap=None, after: float = 14.0):
@@ -183,6 +209,26 @@ def _icloud_cfg(d):
     d.config["icloud"] = {"container": "icloudpd", "limit": "3M"}
 
 
+def _cluster(d):
+    from matrixdash.integrations import ArgoCDIntegration
+    from matrixdash.integrations.argocd import parse_app, problem
+    from matrixdash.runtime.k3s import K3sRuntime
+    d.collector.runtimes = d.collector.runtimes[:1] + [K3sRuntime()]
+    s = d.collector.snap
+    s.containers = k3s_containers() + s.containers
+    s.runtimes = [("docker", "DOCKER", True), ("k3s", "K3S", True)]
+    d.collector.containers = s.containers
+    argo = d.integration(ArgoCDIntegration)
+    apps = sorted((parse_app(i) for i in argocd_items()), key=lambda a: (not problem(a), a["name"]))
+    argo.explain(apps)
+    s.argocd = {"apps": apps, "at": WALL - 5}
+
+
+def _argocd_view(d):
+    _cluster(d)
+    d.toggle_view("argocd")
+
+
 SCENES = {
     "dashboard": lambda: _render(190, 52),
     "boot": lambda: _render(120, 34, at=-0.4),
@@ -200,6 +246,8 @@ SCENES = {
     "netmap_narrow": lambda: _render(140, 48, lambda d: setattr(d, "netmap_open", True), snap=_netmap),
     "confirm": lambda: _render(160, 46, _confirm),
     "compact_integrations": lambda: _render(96, 40, snap=_integrations),
+    "cluster": lambda: _render(200, 60, _cluster),
+    "argocd": lambda: _render(200, 56, _argocd_view),
 }
 
 

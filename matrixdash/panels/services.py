@@ -28,6 +28,10 @@ class ServiceRows:
 class ServicesSection:
     """Extra block at the end of the services panel (e.g. the Claude Code agent)."""
 
+    def reserve(self, s: Snapshot) -> int:
+        """Rows to keep free for this section when the container list is long."""
+        return 0
+
     def draw(self, rows: ServiceRows, s: Snapshot, t: float):
         raise NotImplementedError
 
@@ -80,7 +84,7 @@ class ServicesPanel(Panel):
                 return (0 if ct.name in s.flagged else 1 if bad and ct.state != "exited" else 2 if ct.state == "running" else 3, ct.name)
 
             containers = sorted(s.containers, key=order)
-            reserve = 3 + len(s.units) + 5
+            reserve = 3 + len(s.units) + sum(sec.reserve(s) for sec in self.d.service_sections())
             room = max(1, bottom - row - reserve)
             shown = containers
             scroll = None

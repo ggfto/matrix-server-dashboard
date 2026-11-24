@@ -18,13 +18,14 @@ matrixdash/
   web_view.py              servidor HTTP do espelho (Server-Sent Events) + terminal web opcional
   claude_usage.py          leitura do uso de tokens do Claude Code (~/.claude/projects)
   fmt.py shell.py storage.py sysinfo.py theme.py validators.py   utilitários
-  runtime/                 runtimes de containers: base.ContainerRuntime e docker.DockerRuntime
-  integrations/            recursos opcionais: base.Integration, claude, backup, icloud, tailscale
+  runtime/                 runtimes de containers: base.ContainerRuntime, docker.DockerRuntime, k3s.K3sRuntime
+  integrations/            recursos opcionais: base.Integration, claude, backup, icloud, tailscale, argocd
   panels/                  blocos da tela: base.Panel e um arquivo por painel
   render/                  Canvas, Screen, gráficos de texto, chuva, retrato e widgets
 tests/                     testes (veja abaixo)
 web/index.html             página do espelho (xterm.js em web/static/)
 system/matrix-netcfg       helper root que aplica IP fixo/DHCP via netplan, com rollback
+system/k8s/                ServiceAccount do painel no k3s e o script que gera o kubeconfig dela
 system/tc/Dockerfile       imagem mínima com `tc`, usada para limitar a banda do icloudpd
 install.sh                 instalador interativo
 install_service.sh         serviço systemd no tty1
@@ -74,13 +75,15 @@ aceita seções extras (`ServicesSection`), como o bloco do Claude Code.
 UPDATE_GOLDEN=1 .venv/bin/python -m unittest discover -s tests       # aceita telas novas
 ```
 
-- `test_golden.py`: desenha 16 telas (painel completo, boot, ajuda, menu, compacta, backup,
-  iCloud, relatório de uso, mapa da rede, confirmação...) com dados fixos, relógio e sorteios
+- `test_golden.py`: desenha 18 telas (painel completo, boot, ajuda, menu, compacta, backup,
+  iCloud, relatório de uso, mapa da rede, confirmação, cluster k3s, Argo CD...) com dados fixos, relógio e sorteios
   congelados e compara caractere por caractere e cor por cor com `tests/golden/`. Mudou o
   desenho de propósito? Rode com `UPDATE_GOLDEN=1` e confira o `git diff` dos arquivos.
 - `test_runtime.py`: leitura da saída do `docker` (capturada de um servidor real) e a junção
   dos containers de vários runtimes.
 - `test_behaviour.py`: teclas, ações das integrações, gravação do menu e eventos.
+- `test_k3s.py` e `test_argocd.py`: workloads a partir dos pods, métricas, `rollout restart`,
+  leitura das Applications, eventos e alertas (com JSON sintético, sem cluster).
 - `test_smoke.py`: roda o `matrix_dashboard.py` de verdade com `--detect` e `--once`.
 
 Os testes precisam de Linux (o painel usa `termios`). Fora do Linux, rode num container:

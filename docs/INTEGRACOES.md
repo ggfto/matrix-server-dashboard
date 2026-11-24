@@ -29,6 +29,23 @@ O kubeconfig é procurado nesta ordem: chave `kubeconfig`, `$KUBECONFIG`,
 No menu `C`, os workloads do k3s só têm a ação **reiniciar** (`kubectl rollout restart`).
 Desligar e ligar ficam de fora: com o Argo CD em self-heal, um scale para 0 seria desfeito.
 
+## Argo CD
+
+Com o k3s ligado (seção acima) e o Argo CD instalado no cluster, as Applications aparecem
+sozinhas (`"argocd": "auto"`). Não precisa de token da API do Argo CD: as Applications são
+recursos do próprio cluster e a conta `matrix-dashboard` tem permissão de leitura nelas.
+
+- **Painel de serviços**: bloco `GITOPS // ARGO CD` com as apps com problema (Degraded,
+  OutOfSync, sync que falhou), cada uma com o motivo, e uma linha com as que estão ok.
+- **Tecla `A`**: lista completa no lugar dos painéis de sistema e serviços: namespace, sync,
+  health, revisão implantada, branch/tag alvo, há quanto tempo foi o último sync e a mensagem.
+- **Cabeçalho**: alerta para app Degraded/Missing ou sync que falhou; resumo no letreiro.
+- **Console**: eventos de mudança de saúde, de sync, de revisão implantada e de sync com erro.
+
+Quando o Argo CD diz só "Degraded" (versões recentes guardam a saúde dos recursos fora da
+Application), o painel mostra o erro dos pods do namespace de destino, como
+`api: ImagePullBackOff`. O painel só lê: sync e rollback continuam pelo Argo CD.
+
 ## Claude Code
 
 Detectado automaticamente (`"claude": "auto"`) quando o executável `claude` existe.

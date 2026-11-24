@@ -39,6 +39,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "runtimes": ["auto"],
     # k3s: kubeconfig of the dashboard's ServiceAccount (system/k8s/make-kubeconfig.sh); "" = search
     "kubeconfig": "",
+    # Argo CD applications read from the k3s cluster: "auto" = when the CRD exists, false = never
+    "argocd": "auto",
     # optional integrations, off unless configured
     "backup_state": "",
     "icloud": {},

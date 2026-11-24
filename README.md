@@ -15,6 +15,8 @@ Docker e seus endpoints, rede, Tailscale e Claude Code.
 
 - **Zero configuração**: discos, ~35 serviços comuns, todos os containers e um teste HTTP/TCP para
   cada porta publicada. Container novo aparece sozinho.
+- **k3s e Argo CD**: workloads do cluster junto com os containers do Docker e as Applications do
+  Argo CD com sync, health e o motivo de cada problema (tecla `A`).
 - **Telemetria ao vivo**: CPU total e por núcleo, RAM, swap, temperatura, carga, discos, rede
   (download/upload, IPv4/IPv6, latência) com gráficos.
 - **Console de eventos**: container caiu ou subiu, serviço parou, endpoint fora do ar, alerta de
