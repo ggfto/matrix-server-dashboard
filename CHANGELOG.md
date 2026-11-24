@@ -9,6 +9,9 @@
 - k3s: workloads do cluster no painel de serviços (prontos/desejados, CPU, memória, erros dos
   pods como alerta) e "reiniciar" pelo menu, com uma ServiceAccount própria
   (`system/k8s/make-kubeconfig.sh`).
+- Alertas por Telegram, Discord, ntfy e webhook: os alertas do cabeçalho viram mensagens,
+  com espera antes de avisar, lembrete, "resolvido", horário de silêncio, silenciar por 1 hora e
+  mensagem de teste pelo menu `C`.
 - Temas de cores prontos (matrix, âmbar, gelo, synthwave, mono) no menu `C`, trocando na hora
   no terminal, no tty1 e na página web; chaves `theme` e `theme_colors`.
 - WireGuard: estado da interface e dos peers (handshake, endpoint, tráfego) na linha de

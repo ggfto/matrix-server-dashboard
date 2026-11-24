@@ -3,6 +3,41 @@
 Todas são opcionais. Quando não estão configuradas, as partes da tela, as teclas e as seções do
 menu correspondentes não aparecem.
 
+## Alertas (Telegram, Discord, ntfy, webhook)
+
+Os mesmos alertas do letreiro vermelho do cabeçalho viram mensagens: CPU, RAM, disco,
+temperatura, internet, container ou workload com problema, serviço do systemd parado, app do
+Argo CD Degraded ou com sync que falhou, túnel WireGuard/Tailscale caído e limite do Claude.
+
+- Um problema só é avisado se **durar** `delay` minutos (padrão 2): o que pisca e volta não avisa.
+- Enquanto durar, um **lembrete** a cada `repeat` minutos (padrão 60; `0` = só uma vez).
+- Quando acaba, chega **✅ resolvido** com quanto tempo durou.
+- O que aparece junto vai numa mensagem só.
+- **Horário de silêncio** e **silenciar por 1 hora** seguram os avisos; o que ainda estiver
+  ativo é enviado quando o silêncio acaba.
+
+Configure um ou mais canais na chave `alerts` do `config.json` (o resto fica no menu `C` →
+ALERTAS, que também tem **Enviar mensagem de teste**):
+
+```json
+"alerts": {
+  "telegram": {"token": "123456:ABC-seu-token", "chat_id": "123456789"},
+  "discord":  {"webhook": "https://discord.com/api/webhooks/..."},
+  "ntfy":     {"topic": "um-nome-dificil-de-adivinhar", "server": "https://ntfy.sh", "token": ""},
+  "webhook":  {"url": "https://n8n.exemplo/webhook/servidor", "headers": {"X-Token": "..."}}
+}
+```
+
+| Canal | Como conseguir |
+|---|---|
+| Telegram | Fale com o **@BotFather**, `/newbot`, copie o token. Mande uma mensagem para o seu bot e abra `https://api.telegram.org/bot<TOKEN>/getUpdates`: o `chat.id` é o `chat_id` (grupos têm id negativo). |
+| Discord | No canal: Editar canal → Integrações → Webhooks → Novo webhook → Copiar URL. |
+| ntfy | Instale o app **ntfy** no celular e assine um tópico. No ntfy.sh público qualquer um que souber o nome do tópico lê as mensagens: use um nome difícil, ou um servidor próprio com `token`. |
+| Webhook | Qualquer URL que aceite `POST` com JSON: `{"host", "kind", "title", "text", "alerts": [{"text", "state", "since"}]}`. `kind` é `problem`, `reminder`, `resolved` ou `test`. |
+
+O `config.json` passa a ter segredos: deixe só o seu usuário ler (`chmod 600 config.json`). O
+painel mantém essa permissão quando grava o arquivo.
+
 ## WireGuard
 
 Detectado sozinho quando existe uma interface WireGuard (`wg0`...). Sem permissão extra, o

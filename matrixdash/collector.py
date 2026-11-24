@@ -19,6 +19,7 @@ from .integrations import ALL as INTEGRATIONS
 from .integrations import Integration
 from .models import Container, Event, Snapshot
 from .netmap import NetMapper
+from .notify.manager import AlertManager
 from .runtime import ContainerRuntime, from_config
 from .shell import run_cmd
 from .storage import write_json
@@ -91,6 +92,7 @@ class Collector:
         self.alert_state: dict[str, bool] = {}
         self.probe_cycle = 0
         self.last_probe_event = time.monotonic()
+        self.notifier = AlertManager(self)
         self.netmap_styles = {"new": AMBER, "gone": G3}
         self.netmapper = NetMapper(config, self.iface, self.runtimes,
                                    lambda tag, text, kind: self.emit(tag, text, self.netmap_styles.get(kind, G4)))
@@ -269,6 +271,10 @@ class Collector:
         self._detect_events(s)
         s.flagged = set(self.flagged)
         self.snap = s
+        try:
+            self.notifier.check(s)
+        except Exception as exc:
+            self.emit("ERROR", f"alertas: {exc}"[:80], RED)
 
     # --- event detection
 

@@ -12,6 +12,8 @@ matrixdash/
   models.py                Snapshot, Container, Event...
   config.py                padrões, leitura e gravação do config.json
   autodetect.py            detecção de discos, interface, serviços, testes de containers e redes
+  alerts.py                lista de alertas ativos (cabeçalho e notificações)
+  notify/                  canais de aviso (channels.py) e quem decide quando avisar (manager.py)
   health.py                limites de CPU/RAM/temperatura/disco (alertas e eventos)
   netmap.py                mapa da rede: vizinhos ARP/IPv6, mDNS/NetBIOS, Tailscale, redes de containers
   settings_menu.py         menu de configurações (tecla C)
@@ -83,6 +85,9 @@ UPDATE_GOLDEN=1 .venv/bin/python -m unittest discover -s tests       # aceita te
 - `test_runtime.py`: leitura da saída do `docker` (capturada de um servidor real) e a junção
   dos containers de vários runtimes.
 - `test_behaviour.py`: teclas, ações das integrações, gravação do menu e eventos.
+- `test_alerts.py`: quando os avisos saem (espera, lembrete, resolvido, silêncio) e a
+  requisição de cada canal.
+- `test_web.py`: espelho web de ponta a ponta (servidor e cliente reais).
 - `test_wireguard.py`: interfaces e peers a partir da saída de `ip` e `wg show`.
 - `test_k3s.py` e `test_argocd.py`: workloads a partir dos pods, métricas, `rollout restart`,
   leitura das Applications, eventos e alertas (com JSON sintético, sem cluster).

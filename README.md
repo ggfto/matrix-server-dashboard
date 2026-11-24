@@ -20,6 +20,8 @@ Docker e seus endpoints, rede, Tailscale e Claude Code.
   Argo CD com sync, health e o motivo de cada problema (tecla `A`).
 - **Telemetria ao vivo**: CPU total e por núcleo, RAM, swap, temperatura, carga, discos, rede
   (download/upload, IPv4/IPv6, latência) com gráficos.
+- **Alertas no celular**: Telegram, Discord, ntfy ou webhook, sem spam (só o que dura, um
+  aviso por problema, "resolvido" quando acaba).
 - **Console de eventos**: container caiu ou subiu, serviço parou, endpoint fora do ar, alerta de
   CPU/RAM/disco, dispositivo novo na rede.
 - **Mapa da rede** (`W`): dispositivos da LAN com nome e fabricante, peers do Tailscale e redes

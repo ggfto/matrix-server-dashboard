@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, TypeVar
 
-from . import VERSION, autodetect, health, theme
+from . import VERSION, alerts, autodetect, theme
 from .collector import Collector
 from .config import merge_config
 from .fmt import fmt_uptime
@@ -389,24 +389,7 @@ class Dashboard:
         self.screen.invalidate()
 
     def alerts(self, s: Snapshot) -> list[str]:
-        out = [b.alert for b in health.thresholds(s, self.thresholds) if b.active]
-        if not s.internet:
-            out.append("INTERNET OFFLINE")
-        elif not s.net4:
-            out.append("IPV4 OFFLINE (IPV6 OK) - CONTAINERS SEM INTERNET")
-        elif s.net6 is False:
-            out.append("IPV6 OFFLINE (IPV4 OK)")
-        for ct in s.containers:
-            if ct.state in ("restarting", "dead") or ct.health == "unhealthy" or ct.name in s.flagged:
-                # k3s keeps the pod's error reason (ImagePullBackOff...) in exit_code
-                problem = ct.exit_code if ct.runtime == "k3s" and ct.exit_code else                     ct.health if ct.health == "unhealthy" else ct.state
-                out.append(f"{ct.short.upper()} {problem.upper()}")
-        for label, _, state in s.units:
-            if state != "active":
-                out.append(f"{label} {state.upper()}")
-        for integ in self.integrations:
-            out += integ.alerts(s)
-        return out
+        return [a.text for a in alerts.active(s, self.thresholds, self.integrations)]
 
     def usage_page_active(self, s: Snapshot, t: float) -> bool:
         if not s.usage or self.usage_mode == "retrato":

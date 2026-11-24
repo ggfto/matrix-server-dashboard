@@ -96,6 +96,7 @@ class SettingsMenu:
             v[f"th_{key}"] = str(th.get(key, DEFAULT_CONFIG["thresholds"][key]))
         for integ in self.d.integrations:
             integ.menu_load(v)
+        self.d.collector.notifier.menu_load(v)
 
     def build(self):
         m = MenuBuilder(self)
@@ -116,6 +117,7 @@ class SettingsMenu:
 
         for integ in self.d.integrations:
             integ.menu(m)
+        self.d.collector.notifier.menu(m)
 
         m.header("PAINEL")
         save = self.save_panel

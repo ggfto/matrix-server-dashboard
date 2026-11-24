@@ -59,6 +59,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "allow": ["auto"]},
     "claude_limits_file": "~/.claude/statusline-last.json",
     "screen_off": {"enabled": False, "from": "00:00", "to": "07:00"},
+    # notifications of the header alerts (docs/INTEGRACOES.md): minutes before sending, reminder
+    # interval (0 = never), quiet hours, and the channels telegram / discord / ntfy / webhook
+    "alerts": {"delay": 2, "repeat": 60, "quiet": {"enabled": False, "from": "23:00", "to": "07:00"}},
 }
 
 
