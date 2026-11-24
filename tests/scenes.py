@@ -172,7 +172,7 @@ def _menu_on_containers(d):
 def _confirm(d):
     d.confirm("REINICIAR O SERVIDOR", ["O servidor fica fora do ar por 1 a 2 minutos.",
                                        "Painel e serviços habilitados voltam sozinhos."], lambda: None)
-    d.notify("tela redesenhada", demo.md.G4, 2)
+    d.notify("tela redesenhada", demo.theme.G4, 2)
 
 
 def _usage_fixed(d):

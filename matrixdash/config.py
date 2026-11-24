@@ -1,0 +1,66 @@
+"""Defaults and loading of config.json."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+from . import autodetect
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    # "" = "<HOSTNAME> // MATRIX SERVER MONITOR"
+    "title": "",
+    # name shown on the boot screen; "" = the Linux user
+    "operator": "",
+    "brand": "MATRIX SECURE TERMINAL",
+    # photo (png/jpg) or ready ASCII art (.txt); missing file = server name in big letters
+    "image": "assets/portrait.png",
+    "fps": 12,
+    "matrix_density": 0.45,
+    "boot_animation": True,
+    "console_palette": True,
+    "ping_host": "1.1.1.1",
+    "ping_host6": "2606:4700:4700::1111",
+    # Lists with "auto" are filled by autodetect.py; extra items next to "auto" are kept.
+    "mounts": ["auto"],
+    "thresholds": {
+        "cpu": 85,
+        "ram": 85,
+        "disk": 90,
+        "temperature": 80
+    },
+    "systemd_units": ["auto"],
+    "checks": ["auto"],
+    "hide_containers": [],
+    # optional integrations, off unless configured
+    "backup_state": "",
+    "icloud": {},
+    "network_interface": "auto",
+    # "auto" = show the Claude Code panel only when Claude Code is installed
+    "claude": "auto",
+    "claude_plan": "",
+    # control: keys/clicks from the page; terminal: a shell in the browser (no password!)
+    "web": {"enabled": False, "port": 8095, "fps": 5, "control": False, "terminal": False,
+            "allow": ["auto"]},
+    "claude_limits_file": "~/.claude/statusline-last.json",
+    "screen_off": {"enabled": False, "from": "00:00", "to": "07:00"},
+}
+
+
+def merge_config(path: Path) -> dict[str, Any]:
+    config = json.loads(json.dumps(DEFAULT_CONFIG))
+    if path.exists():
+        try:
+            user = json.loads(path.read_text(encoding="utf-8"))
+            for key, value in user.items():
+                if key.startswith("_"):
+                    continue
+                if isinstance(value, dict) and isinstance(config.get(key), dict):
+                    config[key].update(value)
+                else:
+                    config[key] = value
+        except Exception as exc:
+            print(f"Could not read {path}: {exc}", file=sys.stderr)
+    return autodetect.resolve(config)

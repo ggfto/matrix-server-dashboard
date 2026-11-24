@@ -36,11 +36,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from . import ROOT
+
 OUI_FILES = ("/usr/share/nmap/nmap-mac-prefixes", "/usr/share/ieee-data/oui.txt")
 WIFI_VENDORS = ("espressif", "tuya", "shelly", "itead", "sonoff", "amazon", "google", "ring ", "wyze",
                 "xiaomi", "beijing xiaomi", "realme", "oppo", "motorola", "huawei device", "vivo mobile",
                 "roku", "chromecast", "nintendo", "tp-link smart", "broadlink", "ezviz", "imou")
-STATE_FILE = Path(__file__).resolve().parent / ".netmap.json"
+STATE_FILE = ROOT / ".netmap.json"
 PORT_NAMES = {22: "ssh", 139: "samba", 445: "samba", 53: "dns", 80: "http", 443: "https", 8095: "painel",
               19999: "netdata", 5432: "postgres", 1883: "mqtt", 3389: "rdp", 5900: "vnc"}
 SS_RE = re.compile(r"^\d+\s+\d+\s+(\S+):(\d+)\s+(\S+):(\d+)")

@@ -41,7 +41,9 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
-WEB_DIR = Path(__file__).resolve().parent / "web"
+from . import ROOT
+
+WEB_DIR = ROOT / "web"
 STATIC = {
     "/static/xterm.js": ("xterm.js", "application/javascript"),
     "/static/xterm.css": ("xterm.css", "text/css"),

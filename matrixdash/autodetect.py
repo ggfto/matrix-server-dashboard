@@ -397,8 +397,7 @@ def report(config: dict[str, Any]) -> str:
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from matrix_dashboard import merge_config  # noqa: E402
+    from .config import merge_config
 
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent / "config.json"
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent / "config.json"
     print(report(merge_config(path)))
