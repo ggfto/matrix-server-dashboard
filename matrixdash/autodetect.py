@@ -362,7 +362,7 @@ def report(config: dict[str, Any]) -> str:
     checks = live_checks(config.get("checks"), runtimes)
     for rt in runtimes:
         found = rt.containers()
-        lines.append(f"{rt.name:<11} " + (f"{len(found)} containers" if found is not None else rt.unavailable_hint))
+        lines.append(f"{rt.name:<11} " + (f"{len(found)} {rt.boot_unit}" if found is not None else rt.unavailable_hint))
     for c in checks:
         target = c.get("url") or f"tcp {c.get('tcp_host')}:{c.get('tcp_port')}"
         lines.append(f"  probe     {c['name']:<18} {target}")

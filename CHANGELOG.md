@@ -6,7 +6,10 @@
   com três interfaces: `ContainerRuntime` (Docker hoje), `Integration` (Claude Code, backup,
   iCloud, Tailscale) e `Panel` (cada bloco da tela). Detalhes em `docs/DESENVOLVIMENTO.md`.
 - Testes: telas de referência, leitura do Docker, teclas e ações, e um teste do programa real.
-- Nova chave `runtimes` no `config.json` (padrão `["docker"]`).
+- k3s: workloads do cluster no painel de serviços (prontos/desejados, CPU, memória, erros dos
+  pods como alerta) e "reiniciar" pelo menu, com uma ServiceAccount própria
+  (`system/k8s/make-kubeconfig.sh`).
+- Novas chaves `runtimes` (padrão `["auto"]`: Docker e k3s, os que existirem) e `kubeconfig`.
 - O letreiro do cabeçalho mostra os limites do Claude e o progresso do iCloud mesmo sem backup
   rodando (antes só apareciam junto do backup).
 

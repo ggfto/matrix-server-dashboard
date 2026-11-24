@@ -65,6 +65,7 @@ class DockerRuntime(ContainerRuntime):
     name = "docker"
     label = "DOCKER"
     unavailable_hint = "not available (install Docker or add user to group docker)"
+    boot_label = "docker engine"
 
     @staticmethod
     def installed() -> bool:

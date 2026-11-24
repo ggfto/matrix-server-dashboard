@@ -3,6 +3,32 @@
 Todas são opcionais. Quando não estão configuradas, as partes da tela, as teclas e as seções do
 menu correspondentes não aparecem.
 
+## k3s / Kubernetes
+
+Com `"runtimes": ["auto"]` (padrão), o painel mostra os workloads do k3s junto com os containers
+do Docker quando existe `kubectl` e um kubeconfig legível. Cada Deployment, StatefulSet e
+DaemonSet vira uma linha: prontos/desejados, CPU e memória somadas dos pods (pelo
+metrics-server) e há quanto tempo o pod mais novo subiu. Pods com `ImagePullBackOff`,
+`CrashLoopBackOff` e afins sobem para o topo e viram alerta no cabeçalho.
+
+O kubeconfig do k3s (`/etc/rancher/k3s/k3s.yaml`) só pode ser lido pelo root. Em vez de abrir
+esse arquivo, crie uma conta só para o painel:
+
+```bash
+sudo ./system/k8s/make-kubeconfig.sh          # aplica o RBAC e grava ~/.kube/matrix-dashboard.yaml
+```
+
+A conta (`system/k8s/matrix-dashboard-rbac.yaml`, ServiceAccount `matrix-dashboard` em
+`kube-system`) lê pods, nós, workloads, métricas e as Applications do Argo CD, e pode fazer
+`rollout restart`. Não lê secrets nem apaga nada. Quem usa GitOps pode levar esse YAML para o
+próprio repositório.
+
+O kubeconfig é procurado nesta ordem: chave `kubeconfig`, `$KUBECONFIG`,
+`~/.kube/matrix-dashboard.yaml`, `~/.kube/config`, `/etc/rancher/k3s/k3s.yaml`.
+
+No menu `C`, os workloads do k3s só têm a ação **reiniciar** (`kubectl rollout restart`).
+Desligar e ligar ficam de fora: com o Argo CD em self-heal, um scale para 0 seria desfeito.
+
 ## Claude Code
 
 Detectado automaticamente (`"claude": "auto"`) quando o executável `claude` existe.

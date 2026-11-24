@@ -129,7 +129,9 @@ class SettingsMenu:
         m.header("CONTAINERS", "◂ ▸ escolhe a ação · OK executa")
         policies = self.restart_policies()
         for ct in sorted(snap.containers, key=lambda x: x.name):
-            actions = ["reiniciar", "desligar"] if ct.state == "running" else ["ligar"]
+            actions = self.container_actions(ct)
+            if not actions:
+                continue
             m.items.append({"kind": "container", "label": ct.name, "state": ct.state, "actions": actions,
                             "choice": 0, "policy": policies.get(ct.name, ""),
                             "hint": (f"◂ ▸ escolhe: {' / '.join(actions)} · OK executa" if len(actions) > 1
@@ -242,6 +244,16 @@ class SettingsMenu:
             self.d.collector.iface = iface_for_ip(self.d.collector.ip)
         self.load()
         self.build()
+
+    def container_actions(self, ct) -> list[str]:
+        """Menu verbs the container's runtime allows (k3s only restarts; Docker also stops and starts)."""
+        rt = self.d.collector.runtime_for(ct.name)
+        allowed = {v for v in ("start", "stop", "restart") if rt and rt.supports(ct.name, v)}
+        if ct.state == "exited" and "start" not in allowed:
+            return []
+        wanted = ["reiniciar", "desligar"] if ct.state == "running" else ["ligar"]
+        actions = [v for v in wanted if self.CONTAINER_VERBS[v][0] in allowed]
+        return actions or (["reiniciar"] if "restart" in allowed else [])
 
     def restart_policies(self) -> dict[str, str]:
         result: dict[str, str] = {}

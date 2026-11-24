@@ -79,6 +79,7 @@ class Collector:
         self.container_stats: dict[str, tuple[float | None, str]] = {}
         self.containers: list[Container] = []
         self.docker_ok = False
+        self.runtime_status: list[tuple[str, str, bool]] = []
         self.flagged: set[str] = set()
         self.units: list[tuple[str, str, str]] = []
         self.probes: dict[str, tuple[bool, int, float | None, str]] = {}
@@ -128,8 +129,10 @@ class Collector:
         result: list[Container] = []
         owner: dict[str, ContainerRuntime] = {}
         reachable = False
+        status = []
         for rt in self.runtimes:
             found = rt.containers()
+            status.append((rt.name, rt.label, found is not None))
             if found is None:
                 continue
             reachable = True
@@ -143,6 +146,7 @@ class Collector:
                 owner[ct.name] = rt
                 result.append(ct)
         self.docker_ok = reachable
+        self.runtime_status = status
         self.containers = result
         self.owner.update(owner)
 
@@ -245,6 +249,7 @@ class Collector:
             integ.collect_fast(tick)
 
         s.docker_ok = self.docker_ok
+        s.runtimes = self.runtime_status
         s.containers = self.containers
         s.units = self.units
         s.probes = self.probes
@@ -343,6 +348,16 @@ class Collector:
             self.last_probe_event = now
             self._probe_line(s)
 
+    @staticmethod
+    def _runtime_lines(s: Snapshot, running: int) -> list[str]:
+        if len(s.runtimes) < 2:
+            return [f"docker {running}/{len(s.containers)} containers running"]
+        lines = []
+        for name, _, _ in s.runtimes:
+            mine = [c for c in s.containers if c.runtime == name]
+            lines.append(f"{name} {sum(1 for c in mine if c.state == 'running')}/{len(mine)} running")
+        return lines
+
     def _probe_line(self, s: Snapshot):
         running = sum(1 for c in s.containers if c.state == "running")
         lines = [
@@ -351,7 +366,7 @@ class Collector:
             f"net down {fmt_rate(s.down)}  up {fmt_rate(s.up)}  "
             + "  ".join(f"{fam} " + (f"{lat:.0f} ms" if up and lat is not None else "down")
                         for fam, up, lat in (("v4", s.net4, s.lat4), ("v6", s.net6, s.lat6)) if up is not None),
-            f"docker {running}/{len(s.containers)} containers running",
+            *self._runtime_lines(s, running),
             f"memory {fmt_size(s.ram_used)} / {fmt_size(s.ram_total)}  swap {s.swap:.0f}%",
         ]
         for mount, pct, used, total in s.disks:

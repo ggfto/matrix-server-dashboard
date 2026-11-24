@@ -35,6 +35,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "systemd_units": ["auto"],
     "checks": ["auto"],
     "hide_containers": [],
+    # container sources: "auto" = every one installed here ("docker", "k3s")
+    "runtimes": ["auto"],
+    # k3s: kubeconfig of the dashboard's ServiceAccount (system/k8s/make-kubeconfig.sh); "" = search
+    "kubeconfig": "",
     # optional integrations, off unless configured
     "backup_state": "",
     "icloud": {},

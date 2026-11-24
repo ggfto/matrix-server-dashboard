@@ -41,7 +41,18 @@ class ContainerRuntime(ABC):
     #: shown by --detect when containers() returns None
     unavailable_hint = "not available"
     #: verbs accepted by action()
-    ACTIONS = ("start", "stop", "restart")
+    ACTIONS: tuple[str, ...] = ("start", "stop", "restart")
+    #: boot screen line: "<what>  //  x/y <unit> running"
+    boot_label = "containers"
+    boot_unit = "containers"
+
+    def __init__(self, config: dict | None = None):
+        self.config = config or {}
+
+    @staticmethod
+    def installed() -> bool:
+        """Whether this runtime exists on the machine (used by "runtimes": ["auto"])."""
+        return False
 
     @abstractmethod
     def containers(self) -> list[Container] | None:
@@ -57,6 +68,10 @@ class ContainerRuntime(ABC):
 
     def logs(self, name: str, since: str = "", tail: int = 0, timeout: float = 8.0) -> list[str]:
         return []
+
+    def supports(self, name: str, verb: str) -> bool:
+        """Whether action(name, verb) can work for this container."""
+        return verb in self.ACTIONS
 
     def action(self, name: str, verb: str, timeout: float = 90.0) -> bool:
         """start / stop / restart one container."""

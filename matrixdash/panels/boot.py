@@ -27,7 +27,19 @@ class BootScreen(Panel):
         ]
         for mount, _, _, total in s.disks:
             lines.append(("OK", f"mount {mount:<8} {fmt_size(total)}"))
-        lines.append(("OK" if s.docker_ok else "FAIL", f"docker engine  //  {running}/{len(s.containers)} containers running"))
+        runtimes = s.runtimes or [("docker", "DOCKER", s.docker_ok)]
+        if len(runtimes) == 1:
+            label = {rt.name: rt.boot_label for rt in self.d.collector.runtimes}.get(runtimes[0][0], "docker engine")
+            lines.append(("OK" if runtimes[0][2] else "FAIL",
+                          f"{label}  //  {running}/{len(s.containers)} containers running"))
+        else:
+            info = {rt.name: rt for rt in self.d.collector.runtimes}
+            for name, _, ok in runtimes:
+                mine = [ct for ct in s.containers if ct.runtime == name]
+                up = sum(1 for ct in mine if ct.state == "running")
+                rt = info.get(name)
+                lines.append(("OK" if ok else "FAIL", f"{rt.boot_label if rt else name}  //  "
+                              f"{up}/{len(mine)} {rt.boot_unit if rt else 'containers'} running"))
         active = sum(1 for _, _, st in s.units if st == "active")
         if s.units:
             lines.append(("OK" if active == len(s.units) else "WARN", f"host services  //  {active}/{len(s.units)} active"))

@@ -66,7 +66,8 @@ MongoDB recebem teste TCP.
 | `systemd_units` | `["auto"]` | serviços do host: `{"name": "RÓTULO", "unit": "nome-da-unit"}` |
 | `checks` | `["auto"]` | testes de endpoint, veja abaixo |
 | `hide_containers` | `[]` | nomes de containers que não aparecem |
-| `runtimes` | `["docker"]` | de onde vêm os containers (hoje só `docker`) |
+| `runtimes` | `["auto"]` | de onde vêm os containers: `docker`, `k3s`; `auto` usa os que existirem na máquina |
+| `kubeconfig` | `""` | kubeconfig usado para o k3s; vazio = procura (veja [Integrações](INTEGRACOES.md#k3s--kubernetes)) |
 | `ping_host` / `ping_host6` | `1.1.1.1` / `2606:4700:4700::1111` | alvo da latência e do teste de internet |
 | `thresholds` | `{"cpu": 85, "ram": 85, "disk": 90, "temperature": 80}` | limites de alerta (%, °C) |
 | `claude` | `"auto"` | `true`/`false` força mostrar/esconder o Claude Code |

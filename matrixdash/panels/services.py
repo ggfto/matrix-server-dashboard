@@ -37,7 +37,8 @@ class ServicesPanel(Panel):
         running = sum(1 for ct in s.containers if ct.state == "running")
         active = sum(1 for _, _, st in s.units if st == "active")
         right = f"{running}/{len(s.containers)} UP"
-        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ SERVICES // DOCKER · HOST · AI", right, t * 14 + 140)
+        sources = " · ".join(label for _, label, _ in s.runtimes) or "DOCKER"
+        ix, iw, bottom = self.frame(c, x, y, w, h, f"▸ SERVICES // {sources} · HOST · AI", right, t * 14 + 140)
         row = y + 1
         blink = int(t * 2) % 2 == 0
         wide = iw >= 70
@@ -58,10 +59,11 @@ class ServicesPanel(Panel):
         col_probe = col_mem + 7
 
         heading("CONTAINERS", f"{running}/{len(s.containers)} running")
-        if not s.docker_ok:
-            c.put(ix + 2, row, "docker unavailable", RED)
+        down = [name for name, _, ok in s.runtimes if not ok]
+        if not s.docker_ok or (down and row < bottom - 1):
+            c.put(ix + 2, row, f"{' · '.join(down) or 'docker'} unavailable", RED)
             row += 1
-        else:
+        if s.docker_ok:
             if row < bottom:
                 c.put(ix + 2, row, "NAME", G2)
                 c.put(col_state, row, "STATE", G2)
@@ -102,7 +104,7 @@ class ServicesPanel(Panel):
                 elif ct.state == "running":
                     dot_style, state_style = AMBER if ct.health == "starting" else RED, AMBER if ct.health == "starting" else RED
                     state = "RUNNING"
-                elif ct.state in ("restarting", "dead") or flagged:
+                elif ct.state in ("restarting", "dead") or flagged or ct.health == "unhealthy":
                     dot_style = RED if blink else G0
                     state_style, state = RED, ct.state.upper()[:8]
                 elif ct.state == "exited":
@@ -110,7 +112,7 @@ class ServicesPanel(Panel):
                 else:
                     dot_style, state_style, state = G2, G2, ct.state.upper()[:8]
                 c.put(ix, row, "●", dot_style)
-                c.put(ix + 2, row, ct.name[:name_w], TEXT if ct.state == "running" else G3)
+                c.put(ix + 2, row, ct.short[:name_w], TEXT if ct.state == "running" else G3)
                 c.put(col_state, row, state, state_style)
                 c.put(col_up, row, ct.age, G4 if ct.state == "running" else G2)
                 if ct.state == "exited":

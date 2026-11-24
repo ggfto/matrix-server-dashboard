@@ -370,7 +370,9 @@ class Dashboard:
             out.append("IPV6 OFFLINE (IPV4 OK)")
         for ct in s.containers:
             if ct.state in ("restarting", "dead") or ct.health == "unhealthy" or ct.name in s.flagged:
-                out.append(f"{ct.name.upper()} {ct.health.upper() if ct.health == 'unhealthy' else ct.state.upper()}")
+                # k3s keeps the pod's error reason (ImagePullBackOff...) in exit_code
+                problem = ct.exit_code if ct.runtime == "k3s" and ct.exit_code else                     ct.health if ct.health == "unhealthy" else ct.state
+                out.append(f"{ct.short.upper()} {problem.upper()}")
         for label, _, state in s.units:
             if state != "active":
                 out.append(f"{label} {state.upper()}")

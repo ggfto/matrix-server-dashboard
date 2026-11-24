@@ -17,8 +17,14 @@ class Container:
     ports: str
     cpu: float | None = None
     mem: str = ""
-    # runtime that owns it ("docker", ...)
+    # runtime that owns it ("docker", "k3s"...)
     runtime: str = ""
+    # short name for narrow columns when `name` carries a prefix (k3s: name "ns/workload", display "workload")
+    display: str = ""
+
+    @property
+    def short(self) -> str:
+        return self.display or self.name
 
 
 @dataclass
@@ -72,6 +78,8 @@ class Snapshot:
     lat4: float | None = None
     lat6: float | None = None
     docker_ok: bool = False
+    # (name, label, reachable) of every configured container runtime
+    runtimes: list[tuple[str, str, bool]] = field(default_factory=list)
     containers: list[Container] = field(default_factory=list)
     flagged: set[str] = field(default_factory=set)
     units: list[tuple[str, str, str]] = field(default_factory=list)
