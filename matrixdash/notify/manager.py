@@ -10,6 +10,7 @@ Sending runs in its own thread, so a slow channel never delays data collection.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import queue
 import secrets
@@ -19,13 +20,15 @@ import time
 import urllib.request
 from typing import TYPE_CHECKING, Any
 
-from .. import alerts, validators
+from .. import ROOT, alerts, validators
 from ..config import save_user_config
 from ..theme import AMBER, CYAN, G5, RED
 from .channels import PROBLEM, REMINDER, RESOLVED, TEST, Message, Notifier, from_config
 
 if TYPE_CHECKING:
     from ..collector import Collector
+
+LOCK_PATH = ROOT / ".alerts.lock"
 
 # A problem must stay away this long before "resolvido" is sent (it may come right back).
 SETTLE = 30
@@ -51,10 +54,29 @@ class AlertManager:
         self.queue: queue.Queue[Message] = queue.Queue()
         self.worker: threading.Thread | None = None
         self.host = socket.gethostname()
+        self.lock_file = None
 
     @property
     def cfg(self) -> dict[str, Any]:
         return self.config.setdefault("alerts", {})
+
+    def sender(self) -> bool:
+        """Only one running dashboard sends (the service and a copy opened over SSH would double every
+        message): the one holding a lock on .alerts.lock. Retried every check, so when the sender
+        stops, another instance takes over."""
+        if self.lock_file is not None:
+            return True
+        try:
+            handle = open(LOCK_PATH, "a+")
+        except OSError:
+            return True  # cannot lock (read-only folder): better twice than never
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            handle.close()
+            return False
+        self.lock_file = handle
+        return True
 
     def channels(self) -> list[Notifier]:
         return from_config(self.cfg)
@@ -85,7 +107,7 @@ class AlertManager:
         for key, st in self.state.items():
             if key not in current and not st.get("gone"):
                 st["gone"] = now
-        if not self.channels() or self.silenced(now):
+        if not self.channels() or self.silenced(now) or not self.sender():
             # Nothing sent now; problems that are still active go out when the silence ends.
             self.state = {k: st for k, st in self.state.items() if k in current or st["sent"]}
             return

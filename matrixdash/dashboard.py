@@ -528,10 +528,14 @@ class Dashboard:
                         rc[xx], rs[xx] = (random.choice(MATRIX_CHARS), G6) if k == 0 and random.random() < 0.3 else (ch, st)
         return c
 
-    def start_web(self):
+    WEB_RETRY = 30.0
+
+    def start_web(self, quiet: bool = False):
+        """Start the web mirror; when the port is taken (another instance), run() tries again later."""
         web_cfg = self.config.get("web") or {}
         if not web_cfg.get("enabled"):
             return
+        self.web_tried = time.monotonic()
         try:
             # The mirror keeps a reference to the palette, so a theme change reaches the page.
             self.web = WebMirror(web_cfg, lambda: Screen(SGR_LINUX), LINUX_PALETTE, self.collector.hostname)
@@ -539,7 +543,14 @@ class Dashboard:
             self.collector.emit("SYSTEM", f"web mirror on port {self.web.port}", G4)
         except OSError as exc:
             self.web = None
-            self.collector.emit("ERROR", f"web mirror failed: {exc}"[:80], RED)
+            if not quiet:
+                self.collector.emit("SYSTEM", f"web mirror: porta ocupada ({exc.strerror or exc}), tento de novo a cada 30 s"[:80],
+                                    AMBER)
+
+    def retry_web(self, now: float):
+        if self.web is None and (self.config.get("web") or {}).get("enabled") and \
+                now - getattr(self, "web_tried", 0.0) > self.WEB_RETRY:
+            self.start_web(quiet=True)
 
     def run(self, once: bool = False, at: float | None = None):
         self.collector.prime()
@@ -574,6 +585,7 @@ class Dashboard:
             while not self.stop:
                 started = time.monotonic()
                 self.read_key()
+                self.retry_web(started)
                 if started - self.last_full_redraw > 120:
                     self.screen.invalidate()
                     self.last_full_redraw = started

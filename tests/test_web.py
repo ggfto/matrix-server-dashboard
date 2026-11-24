@@ -66,3 +66,22 @@ class Stream(unittest.TestCase):
         self.assertIn("palette", events)
         data = events[events.index("palette") + 1]
         self.assertIn(theme.THEMES["gelo"]["g5"], data)
+
+
+class Retry(unittest.TestCase):
+    def test_busy_port_is_retried(self):
+        random.seed(1)
+        d = scenes.demo.make_dashboard(120, 34)
+        port = free_port()
+        d.config["web"] = {"enabled": True, "port": port, "allow": ["127.0.0.1/32"]}
+        blocker = socket.socket(socket.AF_INET6)
+        blocker.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        blocker.bind(("::", port))
+        blocker.listen()
+        d.start_web()
+        self.assertIsNone(d.web)
+        d.retry_web(d.web_tried + 5)
+        self.assertIsNone(d.web)  # too soon
+        blocker.close()
+        d.retry_web(d.web_tried + d.WEB_RETRY + 1)
+        self.assertIsNotNone(d.web)

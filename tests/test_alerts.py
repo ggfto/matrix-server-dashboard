@@ -40,6 +40,7 @@ def setup(config=None):
     rec = Recorder()
     mgr.channels = lambda: [rec]
     mgr.enqueue = lambda msg: mgr.deliver(msg)  # synchronous in tests
+    mgr.sender = lambda: True  # the lock has its own test
     s = d.collector.snap
     s.cpu_hist = []
     s.ram = 40.0
@@ -245,6 +246,24 @@ class ChannelSetup(unittest.TestCase):
         topic = self.saved()["ntfy"]["topic"]
         self.assertRegex(topic, r"^matrix-[a-z0-9-]+-[0-9a-f]{12}$")
         self.assertEqual(self.menu.values["nf_topic"], topic)
+
+
+class SingleSender(unittest.TestCase):
+    def test_only_one_instance_sends_and_the_other_takes_over(self):
+        from matrixdash.notify import manager
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(manager, "LOCK_PATH", Path(tmp) / ".alerts.lock"):
+            d, first, rec1, s = setup({"delay": 0})
+            _, second, rec2, _ = setup({"delay": 0})
+            del first.sender, second.sender  # use the real lock
+            s.ram = 95.0
+            first.check(s, T)
+            second.check(s, T)
+            self.assertEqual((len(rec1.sent), len(rec2.sent)), (1, 0))
+            first.lock_file.close()  # the service stopped
+            first.lock_file = None
+            second.check(s, T + 10)
+            self.assertEqual(len(rec2.sent), 1)
 
 
 class Storage(unittest.TestCase):
