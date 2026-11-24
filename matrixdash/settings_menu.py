@@ -28,6 +28,8 @@ class MenuBuilder:
     def __init__(self, menu: SettingsMenu):
         self.menu = menu
         self.items: list[dict[str, Any]] = []
+        # (label, value) lines that integrations add to the SISTEMA section at the end
+        self.system: list[tuple[str, str]] = []
 
     def header(self, label: str, info: str = ""):
         self.items.append({"kind": "header", "label": label, "info": info})
@@ -42,6 +44,9 @@ class MenuBuilder:
 
     def info(self, label: str, value: str):
         self.items.append({"kind": "info", "label": label, "value": value})
+
+    def system_info(self, label: str, value: str):
+        self.system.append((label, value))
 
 
 class SettingsMenu:
@@ -146,6 +151,8 @@ class SettingsMenu:
         m.info("DNS em uso", net_now.get("dns", "") or "-")
         m.info("Tailscale", f"{ts.get('ip', '-')} · {ts.get('state', '-')}"
                             + (f" · chave expira em {ts['expiry_days']}d" if ts.get("expiry_days") is not None else ""))
+        for label, value in m.system:
+            m.info(label, value)
         m.info("Kernel", snap.kernel)
         self.items = m.items
 

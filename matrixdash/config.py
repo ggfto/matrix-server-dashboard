@@ -41,6 +41,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "kubeconfig": "",
     # Argo CD applications read from the k3s cluster: "auto" = when the CRD exists, false = never
     "argocd": "auto",
+    # WireGuard: false hides it; {"names": {"10.8.0.2": "casa"}} names peers by allowed IP
+    "wireguard": {},
     # optional integrations, off unless configured
     "backup_state": "",
     "icloud": {},

@@ -212,6 +212,7 @@ class NetMapPanel(Panel):
                 c.put(side_x + 51, row, info[: max(0, side_w - 51)], G3 if on else G1)
                 row += 1
             row += 1
+        row = self.draw_wireguard(c, s, side_x, row, side_w, bottom)
         conts = tr.get("containers") or {}
         if row < bottom - 1:
             total_rx = sum(v["rx"] for v in conts.values())
@@ -239,3 +240,33 @@ class NetMapPanel(Panel):
             empty = [n["name"] for n in nets if not n["members"]]
             if empty and row < bottom - 1:
                 c.put(side_x, row, ("redes vazias: " + " ".join(empty))[:side_w], G1)
+
+    def draw_wireguard(self, c: Canvas, s: Snapshot, x: int, row: int, w: int, bottom: int) -> int:
+        """WireGuard interfaces of this server and their peers; returns the next free row."""
+        wg = s.wireguard or {}
+        for iface in wg.get("ifaces") or []:
+            if row >= bottom - 1:
+                break
+            peers = iface["peers"]
+            online = sum(1 for p in peers if p["online"])
+            right = f"{online}/{len(peers)} online" if wg.get("peers_known") else "peers: sudo ./system/wireguard-sudo.sh"
+            section(c, x, row, w, f"WIREGUARD // {iface['name']} {iface['address']}", right, CYAN)
+            row += 1
+            for p in peers:
+                if row >= bottom - 1:
+                    break
+                on = p["online"]
+                c.put(x, row, "●", CYAN if on else (RED if p["keepalive"] else G1))
+                c.put(x + 2, row, p["name"][:18], TEXT if on else G2)
+                c.put(x + 21, row, ",".join(a.split("/")[0] for a in p["allowed"])[:15], G4 if on else G2)
+                if on:
+                    # The peer receives what we send: ▼ is our tx.
+                    self.put_rate(c, x + 37, row, p["tx_rate"], p["rx_rate"], 13)
+                    info = f"{p['endpoint'] or '-'} · handshake {ago(p['handshake'])}"
+                else:
+                    c.put(x + 37, row, f"visto {ago(p['handshake'])}" if p["handshake"] else "nunca conectou", G2)
+                    info = "keepalive: devia estar on-line" if p["keepalive"] else (p["endpoint"] or "")
+                c.put(x + 51, row, info[: max(0, w - 51)], G3 if on else (AMBER if p["keepalive"] else G1))
+                row += 1
+            row += 1
+        return row

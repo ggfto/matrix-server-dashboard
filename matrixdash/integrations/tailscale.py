@@ -9,7 +9,7 @@ from typing import Any
 
 from ..models import Snapshot
 from ..shell import run_cmd
-from ..theme import AMBER, G5, RED
+from ..theme import AMBER, G2, G4, G5, RED
 from .base import Integration
 
 
@@ -86,6 +86,21 @@ class TailscaleIntegration(Integration):
             else:
                 self.emit("NET", f"tailscale {state.lower()}", AMBER)
         self.prev_state = state
+
+    def unit_view(self, unit: str, s: Snapshot) -> tuple[bool, str, int, str, int] | None:
+        ts = s.tailscale if unit == "tailscaled" else None
+        if not ts:
+            return None
+        state = ts.get("state")
+        if state == "Running":
+            days = ts.get("expiry_days")
+            detail = ts.get("ip", "") + (f"  key {days}d" if days is not None and days < 30 else "")
+            return True, "ONLINE", G5, detail, AMBER if days is not None and days < 7 else G4
+        if state == "NeedsLogin":
+            return False, "LOGGED OUT", RED, "login: tailscale up", AMBER
+        if state:
+            return False, str(state).upper()[:10], AMBER, unit, G2
+        return None
 
     def alerts(self, s: Snapshot) -> list[str]:
         ts = s.tailscale or {}

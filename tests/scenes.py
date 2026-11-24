@@ -188,6 +188,17 @@ def _netmap(s):
     s.netmap, s.nettraffic = netmap_state()
 
 
+def _netmap_wireguard(s):
+    _netmap(s)
+    peer = {"id": "AAAAAAAA", "allowed": ["10.8.0.2/32"], "keepalive": 25, "rx": 0, "tx": 0}
+    s.wireguard = {"peers_known": True, "at": WALL, "ifaces": [{
+        "name": "wg0", "address": "10.8.0.1/24", "rx": 0, "tx": 0, "rx_rate": 0.0, "tx_rate": 0.0, "peers": [
+            dict(peer, name="casa", endpoint="203.0.113.7:51820", handshake=WALL - 40, online=True,
+                 rx_rate=2.1e4, tx_rate=3.4e5),
+            dict(peer, id="BBBBBBBB", name="notebook", allowed=["10.8.0.3/32"], keepalive=0, endpoint="",
+                 handshake=WALL - 7200, online=False, rx_rate=0.0, tx_rate=0.0)]}]}
+
+
 def _menu_on_containers(d):
     d.menu.open()
     idx = next(i for i, it in enumerate(d.menu.items) if it["kind"] == "container")
@@ -243,6 +254,8 @@ SCENES = {
     "icloud_login": lambda: _render(200, 56, _icloud_cfg, snap=lambda s: _integrations(s, "login")),
     "usage": lambda: _render(200, 56, _usage_fixed, snap=_integrations),
     "netmap": lambda: _render(200, 56, lambda d: setattr(d, "netmap_open", True), snap=_netmap),
+    "netmap_wireguard": lambda: _render(200, 56, lambda d: setattr(d, "netmap_open", True),
+                                        snap=_netmap_wireguard),
     "netmap_narrow": lambda: _render(140, 48, lambda d: setattr(d, "netmap_open", True), snap=_netmap),
     "confirm": lambda: _render(160, 46, _confirm),
     "compact_integrations": lambda: _render(96, 40, snap=_integrations),

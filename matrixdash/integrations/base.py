@@ -70,6 +70,11 @@ class Integration:
         """Red header alerts."""
         return []
 
+    def unit_view(self, unit: str, s: Snapshot) -> tuple[bool, str, int, str, int] | None:
+        """How the HOST row of one of its systemd units looks when the unit is active:
+        (ok, state label, state style, detail, detail style). None = plain unit row."""
+        return None
+
     def boot_lines(self, s: Snapshot) -> list[tuple[str, str]]:
         """(OK | WARN | FAIL | SYS, text) lines of the boot sequence."""
         return []

@@ -166,19 +166,13 @@ class ServicesPanel(Panel):
                 ok = state == "active"
                 state_label, state_style = state.upper()[:8], G5 if ok else RED
                 detail, detail_style = unit, G2
-                ts = s.tailscale if unit == "tailscaled" else None
-                if ok and ts:
-                    ts_state = ts.get("state")
-                    if ts_state == "Running":
-                        state_label = "ONLINE"
-                        days = ts.get("expiry_days")
-                        detail = ts.get("ip", "") + (f"  key {days}d" if days is not None and days < 30 else "")
-                        detail_style = AMBER if days is not None and days < 7 else G4
-                    elif ts_state == "NeedsLogin":
-                        ok, state_label, state_style = False, "LOGGED OUT", RED
-                        detail, detail_style = "login: tailscale up", AMBER
-                    elif ts_state:
-                        ok, state_label, state_style = False, str(ts_state).upper()[:10], AMBER
+                if ok:
+                    # An integration can tell more about its own unit (tailscaled, wg-quick@wg0...).
+                    for integ in self.d.integrations:
+                        view = integ.unit_view(unit, s)
+                        if view:
+                            ok, state_label, state_style, detail, detail_style = view
+                            break
                 c.put(ix, row, "●", (G5 if (math.sin(t * 2 + row) > -0.3) else G4) if ok else (RED if blink else G0))
                 c.put(ix + 2, row, label[:name_w], TEXT)
                 c.put(col_state, row, state_label, state_style)

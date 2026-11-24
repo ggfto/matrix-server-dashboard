@@ -3,6 +3,33 @@
 Todas são opcionais. Quando não estão configuradas, as partes da tela, as teclas e as seções do
 menu correspondentes não aparecem.
 
+## WireGuard
+
+Detectado sozinho quando existe uma interface WireGuard (`wg0`...). Sem permissão extra, o
+painel mostra o endereço da interface e o tráfego. Para ver os **peers**, que só o root lê,
+libere a leitura:
+
+```bash
+sudo ./system/wireguard-sudo.sh        # regra em /etc/sudoers.d/matrix-dashboard-wireguard
+```
+
+A regra permite apenas `wg show all` com `allowed-ips`, `endpoints`, `latest-handshakes`,
+`transfer` e `persistent-keepalive`, que não mostram chave privada.
+
+- **Serviços**: a linha `wg-quick@wg0` vira `ONLINE 10.8.0.1/24 1/2 peers`.
+- **Mapa da rede (`W`)**: seção `WIREGUARD // wg0` com cada peer: IPs permitidos, tráfego ao
+  vivo, endpoint e último handshake.
+- **Alertas**: interface fora do ar, ou peer com `PersistentKeepalive` (túnel site a site,
+  que deveria estar sempre ligado) sem handshake há mais de 3 minutos. Peers sem keepalive
+  (celular, notebook) só aparecem como offline, sem alerta.
+- **Console**: peer conectou / ficou offline, interface caiu / voltou.
+
+O WireGuard não guarda nomes; os peers aparecem pelo primeiro IP permitido. Para dar nomes:
+
+```json
+"wireguard": {"names": {"10.8.0.2": "casa", "10.8.0.3": "notebook"}}
+```
+
 ## k3s / Kubernetes
 
 Com `"runtimes": ["auto"]` (padrão), o painel mostra os workloads do k3s junto com os containers
