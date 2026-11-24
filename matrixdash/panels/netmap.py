@@ -35,10 +35,7 @@ class NetMapPanel(Panel):
         peers = nm.get("tailscale") or []
         nets = nm.get("docker") or []
         scanned = f"varredura há {time.time() - nm['at']:.0f}s" if nm.get("at") else "varrendo..."
-        c.box(x, y, w, h, "▸ NETWORK MAP // DISPOSITIVOS · TRÁFEGO", f"W fecha · {scanned}", G2, G5)
-        c.pulse(x, y, w, h, t * 18 + 30)
-        ix, iw = x + 2, w - 4
-        bottom = y + h - 1
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ NETWORK MAP // DISPOSITIVOS · TRÁFEGO", f"W fecha · {scanned}", t * 18 + 30)
         if not nm:
             spin = SPINNER[int(t * 8) % 4]
             c.put(ix, y + 2, f"{spin} varrendo {s.iface}, tailscale e docker...", G4)

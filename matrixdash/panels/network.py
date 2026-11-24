@@ -14,9 +14,7 @@ class NetworkPanel(Panel):
     def draw(self, c: Canvas, s: Snapshot, x: int, y: int, w: int, h: int, t: float):
         lan = (s.netmap or {}).get("lan") or {}
         n_on = sum(1 for d in lan.get("devices", []) if d["online"])
-        c.box(x, y, w, h, "▸ NETWORK // LIVE", f"{s.iface} · {n_on} disp · W mapa" if lan else s.iface, G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 60)
-        ix, iw = x + 2, w - 4
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ NETWORK // LIVE", f"{s.iface} · {n_on} disp · W mapa" if lan else s.iface, t * 14 + 60)
         row = y + 1
         down_hist, up_hist = s.down_hist[-iw:], s.up_hist[-iw:]
         down_peak = max(down_hist, default=0.0)
@@ -44,7 +42,7 @@ class NetworkPanel(Panel):
             for r, text in enumerate(rows):
                 c.put_sparse(ix, row + r, text, styles[0] if r == 0 else styles[1])
             row += graph_h
-        if row < y + h - 1:
+        if row < bottom:
             blink = int(t * 2) % 2
             all_ok = s.net4 and s.net6 is not False
             dot = G5 if all_ok else AMBER if s.internet else (RED if blink else G0)

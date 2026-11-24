@@ -25,10 +25,8 @@ class ICloudPanel(Panel):
             "login": ("● PRECISA LOGIN", RED if blink else G0),
             "authenticating": (f"{spin} ENTRANDO NO ICLOUD", AMBER),
         }.get(status, (f"{spin} INICIANDO", G4))
-        c.box(x, y, w, h, "▸ ICLOUD // FOTOS", page, RED if status == "login" else G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 240)
-        ix, iw = x + 2, w - 4
-        row, bottom = y + 1, y + h - 1
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ ICLOUD // FOTOS", page, t * 14 + 240, border=RED if status == "login" else G2)
+        row = y + 1
         c.put(ix, row, label, style)
         route = "iCloud → /data/fotos/icloud"
         c.put(ix + iw - len(route), row, route, G2)

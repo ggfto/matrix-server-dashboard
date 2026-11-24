@@ -8,14 +8,13 @@ from ..models import Snapshot
 from ..render.canvas import Canvas
 from ..render.portrait import Portrait
 from ..render.widgets import bar
-from ..theme import AMBER, G2, G4, G5, G6, RED
+from ..theme import AMBER, G4, G6, RED
 from .base import Panel
 
 
 class PortraitPanel(Panel):
     def draw(self, c: Canvas, s: Snapshot, x: int, y: int, w: int, h: int, t: float):
-        c.box(x, y, w, h, "▸ IDENTITY // OPERATOR", f"◈ {self.d.operator}", G2, G5, clear=False)
-        c.pulse(x, y, w, h, t * 18)
+        self.frame(c, x, y, w, h, "▸ IDENTITY // OPERATOR", f"◈ {self.d.operator}", t * 18, clear=False)
         rows = self.d.glitch_rows if time.monotonic() < self.d.glitch_until else None
         progress = self.d.portrait.draw(c, x + 1, y + 1, w - 2, h - 2, t, rows)
 

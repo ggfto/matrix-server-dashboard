@@ -1,5 +1,15 @@
 # Changelog
 
+## Não lançado
+
+- Código dividido no pacote `matrixdash` (o `matrix_dashboard.py` virou só o ponto de entrada),
+  com três interfaces: `ContainerRuntime` (Docker hoje), `Integration` (Claude Code, backup,
+  iCloud, Tailscale) e `Panel` (cada bloco da tela). Detalhes em `docs/DESENVOLVIMENTO.md`.
+- Testes: telas de referência, leitura do Docker, teclas e ações, e um teste do programa real.
+- Nova chave `runtimes` no `config.json` (padrão `["docker"]`).
+- O letreiro do cabeçalho mostra os limites do Claude e o progresso do iCloud mesmo sem backup
+  rodando (antes só apareciam junto do backup).
+
 ## 3.0 — 2026-11-15
 
 Primeira versão pública.

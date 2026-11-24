@@ -37,11 +37,8 @@ class ServicesPanel(Panel):
         running = sum(1 for ct in s.containers if ct.state == "running")
         active = sum(1 for _, _, st in s.units if st == "active")
         right = f"{running}/{len(s.containers)} UP"
-        c.box(x, y, w, h, "▸ SERVICES // DOCKER · HOST · AI", right, G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 140)
-        ix, iw = x + 2, w - 4
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ SERVICES // DOCKER · HOST · AI", right, t * 14 + 140)
         row = y + 1
-        bottom = y + h - 1
         blink = int(t * 2) % 2 == 0
         wide = iw >= 70
 

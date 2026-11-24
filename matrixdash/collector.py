@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 
 import psutil
 
-from . import autodetect
+from . import autodetect, health
 from .fmt import fmt_rate, fmt_size
 from .integrations import ALL as INTEGRATIONS
 from .integrations import Integration
@@ -335,18 +335,8 @@ class Collector:
                     self.emit("NET", f"internet {fam} lost", RED)
             self.prev_net[fam] = up
 
-        th = self.thresholds
-        recent_cpu = list(self.cpu_hist)[-5:]
-        self._alert("cpu", len(recent_cpu) == 5 and min(recent_cpu) >= float(th.get("cpu", 85)),
-                    f"cpu sustained above {th.get('cpu', 85)}%", "cpu back to normal")
-        self._alert("ram", s.ram >= float(th.get("ram", 85)),
-                    f"memory at {s.ram:.0f}%", "memory back to normal")
-        if s.temperature is not None:
-            self._alert("temp", s.temperature >= float(th.get("temperature", 80)),
-                        f"temperature at {s.temperature:.0f}°C", "temperature back to normal")
-        for mount, pct, _, _ in s.disks:
-            self._alert(f"disk{mount}", pct >= float(th.get("disk", 90)),
-                        f"disk {mount} at {pct:.0f}%", f"disk {mount} back to normal")
+        for breach in health.thresholds(s, self.thresholds):
+            self._alert(breach.key, breach.active, breach.event_on, breach.event_off)
 
         now = time.monotonic()
         if now - self.last_probe_event >= 9:

@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, TypeVar
 
-from . import VERSION, autodetect
+from . import VERSION, autodetect, health
 from .collector import Collector
 from .config import merge_config
 from .fmt import fmt_uptime
@@ -361,18 +361,7 @@ class Dashboard:
         return [self.agent] if self.integration(ClaudeIntegration).enabled() else []
 
     def alerts(self, s: Snapshot) -> list[str]:
-        out = []
-        th = self.thresholds
-        recent = s.cpu_hist[-5:]
-        if len(recent) == 5 and min(recent) >= float(th.get("cpu", 85)):
-            out.append(f"CPU {s.cpu:.0f}%")
-        if s.ram >= float(th.get("ram", 85)):
-            out.append(f"RAM {s.ram:.0f}%")
-        if s.temperature is not None and s.temperature >= float(th.get("temperature", 80)):
-            out.append(f"TEMP {s.temperature:.0f}°C")
-        for mount, pct, _, _ in s.disks:
-            if pct >= float(th.get("disk", 90)):
-                out.append(f"DISK {mount} {pct:.0f}%")
+        out = [b.alert for b in health.thresholds(s, self.thresholds) if b.active]
         if not s.internet:
             out.append("INTERNET OFFLINE")
         elif not s.net4:

@@ -60,10 +60,7 @@ class UsagePanel(Panel):
     def draw(self, c: Canvas, s: Snapshot, x: int, y: int, w: int, h: int, t: float):
         u = s.usage or {}
         mode = "" if self.d.usage_mode == "auto" else " · fixo"
-        c.box(x, y, w, h, "▸ CLAUDE CODE // RELATÓRIO DE USO", f"U alterna{mode}", G2, G5)
-        c.pulse(x, y, w, h, t * 18)
-        ix, iw = x + 2, w - 4
-        bottom = y + h - 1
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ CLAUDE CODE // RELATÓRIO DE USO", f"U alterna{mode}", t * 18)
         row = y + 1
         # Bars grow in when the page appears.
         grow = min(1.0, ((t % 60) - 40) / 1.2) if self.d.usage_mode == "auto" else 1.0

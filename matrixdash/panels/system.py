@@ -12,12 +12,9 @@ from .base import Panel
 
 class SystemPanel(Panel):
     def draw(self, c: Canvas, s: Snapshot, x: int, y: int, w: int, h: int, t: float):
-        c.box(x, y, w, h, "▸ SYSTEM // TELEMETRY", f"{s.cores} CORES", G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 30)
-        ix, iw = x + 2, w - 4
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ SYSTEM // TELEMETRY", f"{s.cores} CORES", t * 14 + 30)
         bw = max(8, iw - 30)
         row = y + 1
-        bottom = y + h - 1
 
         def line(label: str, pct: float, metric: str, extra: str = "", phase: float = 0.0):
             nonlocal row

@@ -13,9 +13,7 @@ from .base import Panel
 class ConsolePanel(Panel):
     def draw(self, c: Canvas, s: Snapshot, x: int, y: int, w: int, h: int, t: float):
         events = list(self.d.collector.events)
-        c.box(x, y, w, h, f"▸ CONSOLE // {self.d.user}@{self.d.collector.hostname}", f"{len(events)} events", G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 90)
-        ix, iw = x + 2, w - 4
+        ix, iw, _ = self.frame(c, x, y, w, h, f"▸ CONSOLE // {self.d.user}@{self.d.collector.hostname}", f"{len(events)} events", t * 14 + 90)
         lines = h - 3
         visible = events[-lines:] if lines > 0 else []
         now = time.monotonic()

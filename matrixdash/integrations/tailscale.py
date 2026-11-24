@@ -13,6 +13,25 @@ from ..theme import AMBER, G5, RED
 from .base import Integration
 
 
+def installed() -> bool:
+    return bool(shutil.which("tailscale"))
+
+
+def status(timeout: float = 4.0) -> tuple[int, str]:
+    """`tailscale status --json` (also read by the network map for the peers)."""
+    return run_cmd(["tailscale", "status", "--json"], timeout=timeout)
+
+
+def parse_time(value: str) -> float | None:
+    """Epoch of a Tailscale UTC timestamp; None for empty or the zero date (0001-01-01)."""
+    if not value or value.startswith("0001"):
+        return None
+    try:
+        return time.mktime(time.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+    except ValueError:
+        return None
+
+
 class TailscaleIntegration(Integration):
     key = "tailscale"
 
@@ -22,7 +41,7 @@ class TailscaleIntegration(Integration):
         self.prev_state: str | None = None
 
     def enabled(self) -> bool:
-        return bool(shutil.which("tailscale"))
+        return installed()
 
     def prime(self):
         self.read()
@@ -33,7 +52,7 @@ class TailscaleIntegration(Integration):
     def read(self):
         if not self.enabled():
             return
-        code, out = run_cmd(["tailscale", "status", "--json"], timeout=4.0)
+        code, out = status()
         if code != 0 and not out:
             self.data = {"state": "Unavailable"}
             return
@@ -43,14 +62,8 @@ class TailscaleIntegration(Integration):
             return
         me = data.get("Self") or {}
         ips = data.get("TailscaleIPs") or []
-        expiry = me.get("KeyExpiry") or ""
-        days = None
-        if expiry and not expiry.startswith("0001"):
-            try:
-                exp = time.mktime(time.strptime(expiry[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
-                days = int((exp - time.time()) // 86400)
-            except ValueError:
-                days = None
+        exp = parse_time(str(me.get("KeyExpiry") or ""))
+        days = int((exp - time.time()) // 86400) if exp is not None else None
         self.data = {
             "state": str(data.get("BackendState", "")),
             "ip": next((ip for ip in ips if "." in ip), ips[0] if ips else ""),

@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from . import ROOT
+from .integrations import tailscale
 from .runtime import ContainerRuntime
 from .shell import run_cmd
 
@@ -386,9 +387,9 @@ class NetMapper:
         return {"subnet": str(net), "gateway": gw, "devices": devices}
 
     def tailscale(self) -> list[dict[str, Any]]:
-        if not shutil.which("tailscale"):
+        if not tailscale.installed():
             return []
-        code, out = run_cmd(["tailscale", "status", "--json"], timeout=5, strip=False)
+        code, out = tailscale.status(timeout=5)
         try:
             data = json.loads(out)
         except ValueError:
@@ -397,13 +398,7 @@ class NetMapper:
         for p in (data.get("Peer") or {}).values():
             ips = p.get("TailscaleIPs") or []
             dns = str(p.get("DNSName") or "").split(".")[0]
-            last = 0.0
-            ls = str(p.get("LastSeen") or "")
-            if ls and not ls.startswith("0001"):
-                try:
-                    last = time.mktime(time.strptime(ls[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
-                except ValueError:
-                    last = 0.0
+            last = tailscale.parse_time(str(p.get("LastSeen") or "")) or 0.0
             peers.append({
                 "name": dns or str(p.get("HostName") or "?"),
                 "ip": next((i for i in ips if "." in i), ips[0] if ips else ""),

@@ -9,7 +9,7 @@ Para ver o resultado da detecção com a sua configuração: `./run.sh --detect`
 
 ## Detecção automática e o marcador `"auto"`
 
-Listas que contêm `"auto"` são preenchidas pelo [`autodetect.py`](../autodetect.py) a cada
+Listas que contêm `"auto"` são preenchidas pelo [`autodetect.py`](../matrixdash/autodetect.py) a cada
 início. Os itens que você escreve ao lado de `"auto"` são mantidos. Assim dá para acrescentar ou
 corrigir algo sem perder o resto:
 
@@ -66,6 +66,7 @@ MongoDB recebem teste TCP.
 | `systemd_units` | `["auto"]` | serviços do host: `{"name": "RÓTULO", "unit": "nome-da-unit"}` |
 | `checks` | `["auto"]` | testes de endpoint, veja abaixo |
 | `hide_containers` | `[]` | nomes de containers que não aparecem |
+| `runtimes` | `["docker"]` | de onde vêm os containers (hoje só `docker`) |
 | `ping_host` / `ping_host6` | `1.1.1.1` / `2606:4700:4700::1111` | alvo da latência e do teste de internet |
 | `thresholds` | `{"cpu": 85, "ram": 85, "disk": 90, "temperature": 80}` | limites de alerta (%, °C) |
 | `claude` | `"auto"` | `true`/`false` força mostrar/esconder o Claude Code |

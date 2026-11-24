@@ -36,11 +36,8 @@ class BackupPanel(Panel):
                 "stalled": ("● STOPPED", RED if blink else G0),
                 "not_started": ("● NOT STARTED", G2),
             }.get(status, (f"● {status.upper()}", G3))
-        c.box(x, y, w, h, "▸ BACKUP // GOOGLE DRIVE", page, RED if status in ("error", "stalled") else G2, G5)
-        c.pulse(x, y, w, h, t * 14 + 200)
-        ix, iw = x + 2, w - 4
+        ix, iw, bottom = self.frame(c, x, y, w, h, "▸ BACKUP // GOOGLE DRIVE", page, t * 14 + 200, border=RED if status in ("error", "stalled") else G2)
         row = y + 1
-        bottom = y + h - 1
         dest = str(b.get("dest", "")).split(":", 1)[-1] or "Google Drive"
         c.put(ix, row, label, style)
         route = f"{b.get('source', '/data')} → {dest}"
